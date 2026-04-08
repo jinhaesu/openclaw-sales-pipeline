@@ -50,6 +50,8 @@ python3 -m src.openclaw_sales_pipeline.cli plan --date 2026-04-08
 python3 -m src.openclaw_sales_pipeline.cli run --date 2026-04-08 --dry-run
 python3 -m src.openclaw_sales_pipeline.cli run --date 2026-04-08 --channel 스마트스토어 --channel 쿠팡\ WING --dry-run
 python3 -m src.openclaw_sales_pipeline.cli validate
+python3 -m src.openclaw_sales_pipeline.cli build-knowledge
+python3 -m src.openclaw_sales_pipeline.cli analyze-file --file /path/to/download.xlsx
 ```
 
 ## 런타임 설정
@@ -108,6 +110,7 @@ python3 -m playwright install chromium
 - 플레이북 기반 메타데이터 출력
 - 실제 selector 액션을 넣을 수 있는 collector 뼈대
 - `goto`, `screenshot`, `note`, `wait_for_timeout` 브라우저 액션 실행
+- `click_text`, `click_role`, `fill_label`, `fill_name`, `fill_credential`, `click_alt`, `eval` 액션 지원
 
 ## 구현 상태
 - API collector:
@@ -121,6 +124,10 @@ python3 -m playwright install chromium
   - Playwright가 있으면 세션 state 저장
   - 플레이북 액션을 실행하고 결과를 저장
 - GS25/CU/세븐일레븐: 텍스트 클릭 기반 브라우저 액션 1차 적용
+- Workflow knowledge:
+  - OpenClaw 채널 마스터 + 영상 지원 + 플레이북 커버리지를 하나의 JSON으로 생성
+- File analysis:
+  - 다운로드한 CSV/XLSX를 읽고 품목별 판매량/매출 요약 생성
 - Validation:
   - 플레이북/비밀키/브라우저 액션 커버리지를 한 번에 점검
 

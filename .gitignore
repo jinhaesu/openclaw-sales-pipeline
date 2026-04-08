@@ -5,4 +5,5 @@ build/
 dist/
 *.pyc
 run_outputs/
+artifacts/
 config/secrets.local.json

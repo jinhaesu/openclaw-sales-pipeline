@@ -6,7 +6,9 @@ from dataclasses import asdict
 from pathlib import Path
 
 from .config import load_channel_master, load_playbooks, load_runtime_config
+from .excel_analysis import analyze_sales_file, write_analysis
 from .orchestrator import build_jobs, execute_jobs, summarize_jobs
+from .workflow_knowledge import build_workflow_knowledge, write_workflow_knowledge
 
 
 def parse_args() -> argparse.Namespace:
@@ -30,6 +32,21 @@ def parse_args() -> argparse.Namespace:
     validate_parser = subparsers.add_parser("validate", help="Validate config, playbooks, and secrets coverage")
     validate_parser.add_argument("--date", default="today", help="Logical date label for validation output")
     validate_parser.add_argument("--channel", action="append", default=[], help="Only include matching vendor names")
+
+    knowledge_parser = subparsers.add_parser("build-knowledge", help="Build workflow knowledge from OpenClaw channel master")
+    knowledge_parser.add_argument(
+        "--output",
+        default="artifacts/workflow_knowledge.json",
+        help="Output JSON path",
+    )
+
+    analyze_parser = subparsers.add_parser("analyze-file", help="Analyze downloaded sales Excel/CSV file")
+    analyze_parser.add_argument("--file", required=True, help="Input file path")
+    analyze_parser.add_argument(
+        "--output",
+        default="artifacts/file_analysis.json",
+        help="Output JSON path",
+    )
     return parser.parse_args()
 
 
@@ -46,6 +63,25 @@ def main() -> None:
     cfg = load_runtime_config(config_path)
     channels = load_channel_master(Path(cfg.master_path).expanduser())
     playbooks = load_playbooks(Path(cfg.playbook_dir).expanduser())
+
+    if args.command == "build-knowledge":
+        knowledge = build_workflow_knowledge(
+            master_path=Path(cfg.master_path).expanduser(),
+            playbook_dir=Path(cfg.playbook_dir).expanduser(),
+        )
+        output_path = Path(args.output).expanduser()
+        write_workflow_knowledge(output_path, knowledge)
+        print(json.dumps({"output": str(output_path.resolve()), "channel_count": knowledge["channel_count"]}, ensure_ascii=False, indent=2))
+        return
+
+    if args.command == "analyze-file":
+        input_path = Path(args.file).expanduser()
+        analysis = analyze_sales_file(input_path)
+        output_path = Path(args.output).expanduser()
+        write_analysis(output_path, analysis)
+        print(json.dumps({"output": str(output_path.resolve()), "row_count": analysis["row_count"], "product_count": analysis["product_count"]}, ensure_ascii=False, indent=2))
+        return
+
     jobs = build_jobs(
         channels=channels,
         playbooks=playbooks,
