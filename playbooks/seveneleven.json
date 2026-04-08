@@ -6,6 +6,22 @@
       "type": "goto"
     },
     {
+      "type": "press",
+      "key": "Escape"
+    },
+    {
+      "type": "click_text",
+      "text": "유통SCM"
+    },
+    {
+      "type": "click_text",
+      "text": "부가정보"
+    },
+    {
+      "type": "click_text",
+      "text": "매입"
+    },
+    {
       "type": "screenshot",
       "path": "login.png"
     },

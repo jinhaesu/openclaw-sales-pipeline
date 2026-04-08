@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict
+from pathlib import Path
 
+from ..api_clients import build_api_client
 from ..models import ApiRequestSpec, Job, JobResult
 from .base import BaseCollector
 
@@ -69,8 +71,33 @@ class ApiCollector(BaseCollector):
             detail = "missing api credentials"
             status = "missing_credentials"
         else:
-            detail = "api collector scaffold ready"
-            status = "scaffolded"
+            client = build_api_client(playbook.api_provider if playbook else None, self.secrets.get(credential_key))
+            if client is None:
+                detail = "no api client registered"
+                status = "unsupported_provider"
+            else:
+                dataset_results = {}
+                try:
+                    for spec in request_specs:
+                        dataset_results[spec.dataset] = client.fetch_dataset(spec.dataset, job.business_date)
+                        (Path(output_dir) / f"api_{spec.dataset}.json").write_text(
+                            json.dumps(dataset_results[spec.dataset], ensure_ascii=False, indent=2) + "\n",
+                            encoding="utf-8",
+                        )
+                    (Path(output_dir) / "api_results_summary.json").write_text(
+                        json.dumps(dataset_results, ensure_ascii=False, indent=2) + "\n",
+                        encoding="utf-8",
+                    )
+                    detail = "api collector executed"
+                    status = "executed"
+                except Exception as exc:
+                    error_payload = {"error": type(exc).__name__, "message": str(exc)}
+                    (Path(output_dir) / "api_error.json").write_text(
+                        json.dumps(error_payload, ensure_ascii=False, indent=2) + "\n",
+                        encoding="utf-8",
+                    )
+                    detail = f"api collector failed: {type(exc).__name__}"
+                    status = "failed"
 
         return JobResult(
             vendor_name=job.vendor_name,

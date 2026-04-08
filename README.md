@@ -92,6 +92,8 @@ python3 -m src.openclaw_sales_pipeline.cli validate
 }
 ```
 
+현재 로컬에는 [`/Users/joinerhs/Documents/New project/config/secrets.local.json`](/Users/joinerhs/Documents/New%20project/config/secrets.local.json) 템플릿도 만들어뒀다.
+
 ## Playwright
 브라우저 수집기는 Python Playwright를 기준으로 설계했다.
 
@@ -109,12 +111,16 @@ python3 -m playwright install chromium
 
 ## 구현 상태
 - API collector:
-  - provider별 요청 매니페스트 생성
-  - 비밀키 존재 여부 검증
-  - 키가 없으면 `missing_credentials`로 종료
+- provider별 요청 매니페스트 생성
+- 비밀키 존재 여부 검증
+- 키가 없으면 `missing_credentials`로 종료
+- 스마트스토어: OAuth 토큰 발급 + 데이터셋 호출 구조 구현
+- 카페24: refresh token/access token 기반 호출 구조 구현
+- 쿠팡: HMAC 서명 기반 호출 구조 구현
 - Browser collector:
   - Playwright가 있으면 세션 state 저장
   - 플레이북 액션을 실행하고 결과를 저장
+- GS25/CU/세븐일레븐: 텍스트 클릭 기반 브라우저 액션 1차 적용
 - Validation:
   - 플레이북/비밀키/브라우저 액션 커버리지를 한 번에 점검
 

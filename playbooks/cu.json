@@ -6,6 +6,22 @@
       "type": "goto"
     },
     {
+      "type": "press",
+      "key": "Escape"
+    },
+    {
+      "type": "click_text",
+      "text": "센터공급"
+    },
+    {
+      "type": "click_text",
+      "text": "납품내역집계"
+    },
+    {
+      "type": "click_text",
+      "text": "물류-상세내역"
+    },
+    {
       "type": "screenshot",
       "path": "landing.png"
     },
@@ -15,6 +31,6 @@
     }
   ],
   "notes": [
-    "초기 브라우저 플레이북"
+    "텍스트 클릭 기반 메뉴 경로 1차 적용"
   ]
 }

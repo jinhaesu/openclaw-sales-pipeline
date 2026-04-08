@@ -17,6 +17,25 @@ class BrowserCollector(BaseCollector):
                 target = action.get("url") or job.login_url
                 page.goto(target, wait_until="domcontentloaded", timeout=30000)
                 executed.append({"type": "goto", "url": target})
+            elif action_type == "press":
+                page.keyboard.press(action.get("key", "Escape"))
+                executed.append({"type": "press", "key": action.get("key", "Escape")})
+            elif action_type == "click_text":
+                text = action.get("text", "")
+                exact = bool(action.get("exact", False))
+                page.get_by_text(text, exact=exact).first.click(timeout=15000)
+                executed.append({"type": "click_text", "text": text, "exact": exact})
+            elif action_type == "click_role":
+                role = action.get("role", "button")
+                name = action.get("name", "")
+                exact = bool(action.get("exact", False))
+                page.get_by_role(role, name=name, exact=exact).first.click(timeout=15000)
+                executed.append({"type": "click_role", "role": role, "name": name, "exact": exact})
+            elif action_type == "fill_label":
+                label = action.get("label", "")
+                value = action.get("value", "")
+                page.get_by_label(label, exact=bool(action.get("exact", False))).fill(value, timeout=15000)
+                executed.append({"type": "fill_label", "label": label})
             elif action_type == "screenshot":
                 path = output_dir / action.get("path", "page.png")
                 page.screenshot(path=str(path), full_page=True)
@@ -72,23 +91,34 @@ class BrowserCollector(BaseCollector):
                 status = "missing_dependency"
                 detail = "playwright not installed"
             else:
-                with sync_playwright() as playwright:
-                    browser = playwright.chromium.launch(headless=True)
-                    context = browser.new_context(storage_state=str(session_state_path) if session_state_path.exists() else None)
-                    page = context.new_page()
-                    executed_actions = self.run_actions(page, output_dir, job)
-                    if not executed_actions:
-                        page.goto(job.login_url, wait_until="domcontentloaded", timeout=30000)
-                        executed_actions = [{"type": "goto", "url": job.login_url}]
-                    (output_dir / "last_url.txt").write_text(page.url + "\n", encoding="utf-8")
-                    (output_dir / "browser_actions_executed.json").write_text(
-                        json.dumps(executed_actions, ensure_ascii=False, indent=2) + "\n",
+                try:
+                    with sync_playwright() as playwright:
+                        browser = playwright.chromium.launch(headless=True)
+                        context = browser.new_context(
+                            storage_state=str(session_state_path) if session_state_path.exists() else None
+                        )
+                        page = context.new_page()
+                        executed_actions = self.run_actions(page, output_dir, job)
+                        if not executed_actions:
+                            page.goto(job.login_url, wait_until="domcontentloaded", timeout=30000)
+                            executed_actions = [{"type": "goto", "url": job.login_url}]
+                        (output_dir / "last_url.txt").write_text(page.url + "\n", encoding="utf-8")
+                        (output_dir / "browser_actions_executed.json").write_text(
+                            json.dumps(executed_actions, ensure_ascii=False, indent=2) + "\n",
+                            encoding="utf-8",
+                        )
+                        context.storage_state(path=str(session_state_path))
+                        browser.close()
+                    status = "scaffolded"
+                    detail = "playwright session initialized"
+                except Exception as exc:
+                    (output_dir / "browser_error.json").write_text(
+                        json.dumps({"error": type(exc).__name__, "message": str(exc)}, ensure_ascii=False, indent=2)
+                        + "\n",
                         encoding="utf-8",
                     )
-                    context.storage_state(path=str(session_state_path))
-                    browser.close()
-                status = "scaffolded"
-                detail = "playwright session initialized"
+                    status = "failed"
+                    detail = f"browser collector failed: {type(exc).__name__}"
 
         return JobResult(
             vendor_name=job.vendor_name,
