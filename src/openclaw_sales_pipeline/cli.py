@@ -5,9 +5,12 @@ import json
 from dataclasses import asdict
 from pathlib import Path
 
+from .browser_discovery import discover_channel
+from .channel_credentials import ChannelCredentialStore
 from .config import load_channel_master, load_playbooks, load_runtime_config
 from .excel_analysis import analyze_sales_file, write_analysis
 from .orchestrator import build_jobs, execute_jobs, summarize_jobs
+from .secrets import SecretStore
 from .workflow_knowledge import build_workflow_knowledge, write_workflow_knowledge
 
 
@@ -47,6 +50,11 @@ def parse_args() -> argparse.Namespace:
         default="artifacts/file_analysis.json",
         help="Output JSON path",
     )
+
+    discover_parser = subparsers.add_parser("discover-browser", help="Discover browser menu/frame structure after playbook actions")
+    discover_parser.add_argument("--date", required=True, help="Business date (YYYY-MM-DD)")
+    discover_parser.add_argument("--channel", action="append", default=[], help="Only include matching vendor names")
+    discover_parser.add_argument("--output-root", default="artifacts/browser_discovery", help="Output directory for discovery dumps")
     return parser.parse_args()
 
 
@@ -97,8 +105,6 @@ def main() -> None:
         return
 
     if args.command == "validate":
-        from .secrets import SecretStore
-
         secrets = SecretStore(Path(cfg.secrets_path).expanduser())
         report = []
         for job in jobs:
@@ -114,6 +120,31 @@ def main() -> None:
                     "has_video": job.has_video,
                 }
             )
+        print(json.dumps({"count": len(report), "items": report}, ensure_ascii=False, indent=2))
+        return
+
+    if args.command == "discover-browser":
+        jobs = build_jobs(
+            channels=channels,
+            playbooks=playbooks,
+            business_date=args.date,
+            artifact_root=Path(cfg.artifact_root).expanduser(),
+            default_strategy=cfg.default_strategy,
+        )
+        jobs = filter_jobs(jobs, getattr(args, "channel", []))
+        secrets = SecretStore(Path(cfg.secrets_path).expanduser())
+        channel_credentials = ChannelCredentialStore(Path(cfg.channel_credentials_path).expanduser())
+        output_root = Path(args.output_root).expanduser()
+        report = []
+        for job in jobs:
+            if job.run_mode != "browser":
+                continue
+            channel_dir = output_root / job.vendor_name.replace(" ", "_")
+            try:
+                result = discover_channel(cfg, secrets, channel_credentials, job, channel_dir)
+                report.append({"vendor_name": job.vendor_name, "status": "ok", **result})
+            except Exception as exc:
+                report.append({"vendor_name": job.vendor_name, "status": "failed", "error": type(exc).__name__, "message": str(exc)})
         print(json.dumps({"count": len(report), "items": report}, ensure_ascii=False, indent=2))
         return
 

@@ -8,6 +8,32 @@ from .base import BaseCollector
 
 
 class BrowserCollector(BaseCollector):
+    def dump_page_summary(self, page, output_dir: Path, file_name: str = "page_summary.json") -> dict:
+        summary = page.evaluate(
+            """() => ({
+              url: location.href,
+              title: document.title,
+              links: Array.from(document.querySelectorAll('a'))
+                .map((el, i) => ({i, text: (el.textContent || '').trim(), href: el.getAttribute('href') || '', onclick: el.getAttribute('onclick') || ''}))
+                .filter(x => x.text)
+                .slice(0, 200),
+              inputs: Array.from(document.querySelectorAll('input'))
+                .map((el, i) => ({i, type: el.type || '', id: el.id || '', name: el.name || '', value: el.value || '', placeholder: el.getAttribute('placeholder') || ''}))
+                .slice(0, 100),
+              frames: Array.from(document.querySelectorAll('frame, iframe'))
+                .map((el, i) => ({i, name: el.name || '', src: el.getAttribute('src') || ''})),
+              texts: Array.from(document.querySelectorAll('td, span, li, strong, b'))
+                .map((el, i) => ({i, text: (el.textContent || '').trim()}))
+                .filter(x => x.text && x.text.length < 60)
+                .slice(0, 250)
+            })"""
+        )
+        (output_dir / file_name).write_text(
+            json.dumps(summary, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        return summary
+
     def run_actions(self, page, output_dir: Path, job: Job) -> list[dict]:
         actions = job.playbook.browser_actions if job.playbook else []
         credentials = self.channel_credentials.get(job.vendor_name)
@@ -123,6 +149,7 @@ class BrowserCollector(BaseCollector):
                             page.goto(job.login_url, wait_until="domcontentloaded", timeout=30000)
                             executed_actions = [{"type": "goto", "url": job.login_url}]
                         (output_dir / "last_url.txt").write_text(page.url + "\n", encoding="utf-8")
+                        self.dump_page_summary(page, output_dir)
                         (output_dir / "browser_actions_executed.json").write_text(
                             json.dumps(executed_actions, ensure_ascii=False, indent=2) + "\n",
                             encoding="utf-8",
