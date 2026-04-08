@@ -20,11 +20,20 @@ def parse_args() -> argparse.Namespace:
 
     plan_parser = subparsers.add_parser("plan", help="Show execution plan")
     plan_parser.add_argument("--date", required=True, help="Business date (YYYY-MM-DD)")
+    plan_parser.add_argument("--channel", action="append", default=[], help="Only include matching vendor names")
 
     run_parser = subparsers.add_parser("run", help="Run execution plan")
     run_parser.add_argument("--date", required=True, help="Business date (YYYY-MM-DD)")
     run_parser.add_argument("--dry-run", action="store_true", help="Skip real collectors")
+    run_parser.add_argument("--channel", action="append", default=[], help="Only include matching vendor names")
     return parser.parse_args()
+
+
+def filter_jobs(jobs, channel_filters):
+    if not channel_filters:
+        return jobs
+    wanted = set(channel_filters)
+    return [job for job in jobs if job.vendor_name in wanted]
 
 
 def main() -> None:
@@ -40,6 +49,7 @@ def main() -> None:
         artifact_root=Path(cfg.artifact_root).expanduser(),
         default_strategy=cfg.default_strategy,
     )
+    jobs = filter_jobs(jobs, getattr(args, "channel", []))
 
     if args.command == "plan":
         summary = summarize_jobs(jobs)

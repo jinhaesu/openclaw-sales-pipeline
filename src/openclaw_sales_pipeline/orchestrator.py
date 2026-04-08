@@ -5,7 +5,9 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
+from .collectors.registry import get_collector
 from .models import ChannelRecord, Job, JobResult, Playbook, RuntimeConfig
+from .secrets import SecretStore
 
 
 API_FIRST_CHANNELS = {
@@ -75,6 +77,12 @@ def build_jobs(
                 output_dir=str(output_dir),
                 auth_type_meaning=channel.auth_type_meaning,
                 collection_path=channel.collection_path,
+                login_url=channel.login_url,
+                manager=channel.manager,
+                channel_group=channel.channel_group,
+                requires_verification=channel.requires_verification,
+                has_video=channel.has_video,
+                playbook=playbooks.get(channel.vendor_name),
                 notes=notes,
             )
         )
@@ -90,6 +98,7 @@ def summarize_jobs(jobs: list[Job]) -> dict[str, int]:
 
 def execute_jobs(jobs: list[Job], cfg: RuntimeConfig, dry_run: bool) -> list[JobResult]:
     grouped: dict[str, list[Job]] = {"api": [], "browser": [], "manual": []}
+    secrets = SecretStore(Path(cfg.secrets_path).expanduser())
     for job in jobs:
         grouped.setdefault(job.run_mode, []).append(job)
 
@@ -104,13 +113,13 @@ def execute_jobs(jobs: list[Job], cfg: RuntimeConfig, dry_run: bool) -> list[Job
         if not bucket:
             continue
         with ThreadPoolExecutor(max_workers=limits[run_mode]) as executor:
-            futures = [executor.submit(_run_job, job, dry_run) for job in bucket]
+            futures = [executor.submit(_run_job, job, cfg, secrets, dry_run) for job in bucket]
             for future in as_completed(futures):
                 results.append(future.result())
     return sorted(results, key=lambda item: item.vendor_name)
 
 
-def _run_job(job: Job, dry_run: bool) -> JobResult:
+def _run_job(job: Job, cfg: RuntimeConfig, secrets: SecretStore, dry_run: bool) -> JobResult:
     output_dir = Path(job.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     payload = {
@@ -127,20 +136,6 @@ def _run_job(job: Job, dry_run: bool) -> JobResult:
         encoding="utf-8",
     )
 
-    if dry_run:
-        detail = "dry-run only; collector not invoked"
-        status = "planned"
-    else:
-        # Placeholder runner.
-        time.sleep(0.05)
-        detail = "scaffold executed; replace with real collector"
-        status = "scaffolded"
-
-    return JobResult(
-        vendor_name=job.vendor_name,
-        strategy=job.strategy,
-        status=status,
-        output_dir=str(output_dir),
-        detail=detail,
-        metadata={"run_mode": job.run_mode},
-    )
+    time.sleep(0.02)
+    collector = get_collector(job, cfg, secrets)
+    return collector.collect(job, dry_run=dry_run)

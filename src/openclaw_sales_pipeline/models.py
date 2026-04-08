@@ -24,6 +24,8 @@ class ChannelRecord:
 class RuntimeConfig:
     master_path: str
     artifact_root: str
+    secrets_path: str
+    session_state_root: str
     api_concurrency: int
     browser_concurrency: int
     manual_concurrency: int
@@ -36,6 +38,7 @@ class Playbook:
     vendor_name: str
     strategy: str
     api_provider: str | None = None
+    credential_key: str | None = None
     preferred_dataset: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
 
@@ -49,6 +52,12 @@ class Job:
     output_dir: str
     auth_type_meaning: str
     collection_path: str
+    login_url: str
+    manager: str
+    channel_group: str
+    requires_verification: bool
+    has_video: bool
+    playbook: Playbook | None = None
     notes: list[str] = field(default_factory=list)
 
 

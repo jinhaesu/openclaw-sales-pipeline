@@ -1,0 +1,14 @@
+{
+  "vendor_name": "11번가",
+  "strategy": "api",
+  "api_provider": "elevenst_open_api",
+  "credential_key": "elevenst",
+  "preferred_dataset": [
+    "orders",
+    "settlements"
+  ],
+  "notes": [
+    "11번가 Open API를 우선 사용한다.",
+    "정산 데이터와 주문 데이터를 함께 맞춘다."
+  ]
+}

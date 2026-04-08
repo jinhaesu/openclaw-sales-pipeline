@@ -2,6 +2,7 @@
   "vendor_name": "쿠팡 WING",
   "strategy": "api",
   "api_provider": "coupang_open_api",
+  "credential_key": "coupang",
   "preferred_dataset": [
     "orders",
     "vendor_sales"

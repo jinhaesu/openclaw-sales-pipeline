@@ -2,6 +2,7 @@
   "vendor_name": "카페24",
   "strategy": "api",
   "api_provider": "cafe24_admin",
+  "credential_key": "cafe24",
   "preferred_dataset": [
     "orders",
     "sales_statistics"

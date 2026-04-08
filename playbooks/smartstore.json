@@ -2,6 +2,7 @@
   "vendor_name": "스마트스토어",
   "strategy": "api",
   "api_provider": "naver_commerce",
+  "credential_key": "smartstore",
   "preferred_dataset": [
     "orders",
     "settlements",

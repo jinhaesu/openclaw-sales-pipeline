@@ -1,0 +1,13 @@
+{
+  "vendor_name": "G마켓",
+  "strategy": "api",
+  "api_provider": "esm_trading_api",
+  "credential_key": "esm",
+  "preferred_dataset": [
+    "orders",
+    "settlements"
+  ],
+  "notes": [
+    "ESM Trading API 승인이 나면 API 우선으로 전환한다."
+  ]
+}
