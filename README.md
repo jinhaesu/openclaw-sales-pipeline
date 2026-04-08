@@ -53,6 +53,7 @@ python3 -m src.openclaw_sales_pipeline.cli validate
 python3 -m src.openclaw_sales_pipeline.cli build-knowledge
 python3 -m src.openclaw_sales_pipeline.cli analyze-file --file /path/to/download.xlsx
 python3 -m src.openclaw_sales_pipeline.cli discover-browser --date 2026-04-08 --channel GS25
+python3 -m src.openclaw_sales_pipeline.cli report-bundle --input-root run_outputs --date-from 2026-04-01 --date-to 2026-04-08 --output-dir artifacts/report_bundles/april_week2
 ```
 
 ## 런타임 설정
@@ -71,6 +72,7 @@ python3 -m src.openclaw_sales_pipeline.cli discover-browser --date 2026-04-08 --
 - `plan`: 오늘 어떤 채널을 어떤 전략으로 돌릴지 미리 보여준다.
 - `run --dry-run`: 실제 호출 없이 병렬 실행 계획과 출력 경로를 만든다.
 - `discover-browser`: 플레이북 액션을 실행한 뒤 현재 페이지, 프레임, 링크, 텍스트 구조를 덤프해서 selector 기준을 빠르게 맞춘다.
+- `report-bundle`: 다운로드 파일과 분석 JSON을 모아 통합 엑셀 리포트, 요약 문서, 메일 초안을 만든다.
 
 ## 비밀키 설정
 예시 파일은 [`/Users/joinerhs/Documents/New project/config/secrets.example.json`](/Users/joinerhs/Documents/New%20project/config/secrets.example.json)에 있다.
@@ -92,6 +94,15 @@ python3 -m src.openclaw_sales_pipeline.cli discover-browser --date 2026-04-08 --
     "access_key": "your-access-key",
     "secret_key": "your-secret-key",
     "vendor_id": "A00000000"
+  },
+  "smtp": {
+    "host": "smtp.example.com",
+    "port": 587,
+    "username": "report@example.com",
+    "password": "replace-me",
+    "from_addr": "report@example.com",
+    "use_tls": true,
+    "use_ssl": false
   }
 }
 ```
@@ -113,6 +124,7 @@ python3 -m playwright install chromium
 - 실제 selector 액션을 넣을 수 있는 collector 뼈대
 - `goto`, `screenshot`, `note`, `wait_for_timeout` 브라우저 액션 실행
 - `click_text`, `click_role`, `fill_label`, `fill_name`, `fill_credential`, `click_alt`, `eval` 액션 지원
+- `click_selector`, `fill_selector`, `type_selector`, `click_text_in_frame`, `assert_frame_url_contains`, `eval_dump` 액션 지원
 
 ## 구현 상태
 - API collector:
@@ -133,6 +145,11 @@ python3 -m playwright install chromium
   - OpenClaw 채널 마스터 + 영상 지원 + 플레이북 커버리지를 하나의 JSON으로 생성
 - File analysis:
   - 다운로드한 CSV/XLSX를 읽고 품목별 판매량/매출 요약 생성
+- Reporting:
+  - 다운로드 파일/분석 JSON을 모아 통합 레코드 생성
+  - 일별 채널 매출, 월별 채널 매출, 품목별 매출, 품목별 판매량, 채널별 품목 매출 엑셀 시트 생성
+  - 요약 Markdown과 `.eml` 메일 초안 생성
+  - SMTP 설정이 있으면 실제 메일 발송 가능
 - Validation:
   - 플레이북/비밀키/브라우저 액션 커버리지를 한 번에 점검
 
@@ -148,3 +165,24 @@ python3 -m playwright install chromium
 - 브라우저 채널은 `discover-browser`로 메뉴 구조를 먼저 수집한 뒤 selector를 고정한다.
 - OpenClaw 쪽에는 `sales_ops/openclaw_pipeline_bridge.md`가 연결돼 있어서, 반복 작업은 이 프로젝트 명령을 우선 참고하도록 해두었다.
 - 사용자 확인이 꼭 필요한 경우는 인증코드, 계정 권한, 실제 destructive 작업 정도로만 제한한다.
+
+## 리포트 번들 운영 예시
+다운로드 파일을 각 채널 결과 디렉터리 아래에 둔 뒤 다음처럼 실행하면 된다.
+
+```bash
+python3 -m src.openclaw_sales_pipeline.cli report-bundle \
+  --input-root run_outputs \
+  --date-from 2026-04-01 \
+  --date-to 2026-04-08 \
+  --output-dir artifacts/report_bundles/april_week2 \
+  --email-to finance@example.com \
+  --email-to sales@example.com
+```
+
+생성 결과:
+- 통합 엑셀 리포트
+- 요약 Markdown
+- 소스 manifest JSON
+- 첨부가 포함된 `.eml` 메일 초안
+
+SMTP 설정이 있으면 `--send-email`을 추가해 바로 발송할 수 있다.

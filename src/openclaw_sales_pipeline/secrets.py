@@ -12,6 +12,7 @@ class SecretStore:
         "coupang": ["access_key", "secret_key", "vendor_id"],
         "elevenst": ["api_key"],
         "esm": ["api_key", "seller_id"],
+        "smtp": ["host", "port", "username", "password", "from_addr"],
     }
 
     def __init__(self, path: Path) -> None:
