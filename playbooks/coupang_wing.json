@@ -7,6 +7,16 @@
     "orders",
     "vendor_sales"
   ],
+  "browser_actions": [
+    {
+      "type": "goto",
+      "url": "https://wing.coupang.com/login"
+    },
+    {
+      "type": "screenshot",
+      "path": "login_or_dashboard.png"
+    }
+  ],
   "notes": [
     "WING API 키와 vendorId가 필요하다.",
     "로켓프레시는 권한 범위가 다를 수 있으니 별도 확인한다."

@@ -49,6 +49,7 @@ cd "/Users/joinerhs/Documents/New project"
 python3 -m src.openclaw_sales_pipeline.cli plan --date 2026-04-08
 python3 -m src.openclaw_sales_pipeline.cli run --date 2026-04-08 --dry-run
 python3 -m src.openclaw_sales_pipeline.cli run --date 2026-04-08 --channel 스마트스토어 --channel 쿠팡\ WING --dry-run
+python3 -m src.openclaw_sales_pipeline.cli validate
 ```
 
 ## 런타임 설정
@@ -104,6 +105,18 @@ python3 -m playwright install chromium
 - 세션 state 경로 생성
 - 플레이북 기반 메타데이터 출력
 - 실제 selector 액션을 넣을 수 있는 collector 뼈대
+- `goto`, `screenshot`, `note`, `wait_for_timeout` 브라우저 액션 실행
+
+## 구현 상태
+- API collector:
+  - provider별 요청 매니페스트 생성
+  - 비밀키 존재 여부 검증
+  - 키가 없으면 `missing_credentials`로 종료
+- Browser collector:
+  - Playwright가 있으면 세션 state 저장
+  - 플레이북 액션을 실행하고 결과를 저장
+- Validation:
+  - 플레이북/비밀키/브라우저 액션 커버리지를 한 번에 점검
 
 ## 다음 확장 포인트
 - Playwright 기반 브라우저 수집기 추가

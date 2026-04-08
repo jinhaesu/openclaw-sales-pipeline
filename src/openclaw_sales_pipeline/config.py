@@ -63,6 +63,8 @@ def load_playbooks(directory: Path) -> dict[str, Playbook]:
             credential_key=raw.get("credential_key"),
             preferred_dataset=list(raw.get("preferred_dataset", [])),
             notes=list(raw.get("notes", [])),
+            browser_actions=list(raw.get("browser_actions", [])),
+            metadata=dict(raw.get("metadata", {})),
         )
         playbooks[playbook.vendor_name] = playbook
     return playbooks

@@ -1,0 +1,20 @@
+{
+  "vendor_name": "CU",
+  "strategy": "browser_download",
+  "browser_actions": [
+    {
+      "type": "goto"
+    },
+    {
+      "type": "screenshot",
+      "path": "landing.png"
+    },
+    {
+      "type": "note",
+      "message": "센터공급 > 납품내역집계 selector를 추후 추가한다."
+    }
+  ],
+  "notes": [
+    "초기 브라우저 플레이북"
+  ]
+}

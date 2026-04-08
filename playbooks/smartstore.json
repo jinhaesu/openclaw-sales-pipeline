@@ -8,6 +8,16 @@
     "settlements",
     "sales_summary"
   ],
+  "browser_actions": [
+    {
+      "type": "goto",
+      "url": "https://sell.smartstore.naver.com/#/home/dashboard"
+    },
+    {
+      "type": "screenshot",
+      "path": "dashboard.png"
+    }
+  ],
   "notes": [
     "네이버 커머스API를 우선 사용한다.",
     "정산과 주문 데이터를 결합해 순매출 기준을 맞춘다."

@@ -26,6 +26,10 @@ def parse_args() -> argparse.Namespace:
     run_parser.add_argument("--date", required=True, help="Business date (YYYY-MM-DD)")
     run_parser.add_argument("--dry-run", action="store_true", help="Skip real collectors")
     run_parser.add_argument("--channel", action="append", default=[], help="Only include matching vendor names")
+
+    validate_parser = subparsers.add_parser("validate", help="Validate config, playbooks, and secrets coverage")
+    validate_parser.add_argument("--date", default="today", help="Logical date label for validation output")
+    validate_parser.add_argument("--channel", action="append", default=[], help="Only include matching vendor names")
     return parser.parse_args()
 
 
@@ -54,6 +58,27 @@ def main() -> None:
     if args.command == "plan":
         summary = summarize_jobs(jobs)
         print(json.dumps({"summary": summary, "jobs": [asdict(job) for job in jobs]}, ensure_ascii=False, indent=2))
+        return
+
+    if args.command == "validate":
+        from .secrets import SecretStore
+
+        secrets = SecretStore(Path(cfg.secrets_path).expanduser())
+        report = []
+        for job in jobs:
+            report.append(
+                {
+                    "vendor_name": job.vendor_name,
+                    "strategy": job.strategy,
+                    "run_mode": job.run_mode,
+                    "has_playbook": job.playbook is not None,
+                    "credential_key": job.playbook.credential_key if job.playbook else None,
+                    "has_credentials": secrets.has(job.playbook.credential_key) if job.playbook else False,
+                    "browser_actions": len(job.playbook.browser_actions) if job.playbook else 0,
+                    "has_video": job.has_video,
+                }
+            )
+        print(json.dumps({"count": len(report), "items": report}, ensure_ascii=False, indent=2))
         return
 
     results = execute_jobs(jobs, cfg, dry_run=bool(args.dry_run))

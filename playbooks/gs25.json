@@ -1,0 +1,21 @@
+{
+  "vendor_name": "GS25",
+  "strategy": "browser_download",
+  "browser_actions": [
+    {
+      "type": "goto"
+    },
+    {
+      "type": "screenshot",
+      "path": "landing.png"
+    },
+    {
+      "type": "note",
+      "message": "부가정보 > 납품정보 > 기간별로 이동하는 selector를 다음 단계에서 구체화한다."
+    }
+  ],
+  "notes": [
+    "초기 브라우저 플레이북",
+    "반복 메뉴 이동은 selector 기반으로 추후 고정한다."
+  ]
+}

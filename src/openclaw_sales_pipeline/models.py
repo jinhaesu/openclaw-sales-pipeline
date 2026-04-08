@@ -41,6 +41,8 @@ class Playbook:
     credential_key: str | None = None
     preferred_dataset: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
+    browser_actions: list[dict[str, Any]] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -69,3 +71,15 @@ class JobResult:
     output_dir: str
     detail: str
     metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class ApiRequestSpec:
+    provider: str
+    credential_key: str | None
+    dataset: str
+    method: str
+    url: str
+    headers: dict[str, str] = field(default_factory=dict)
+    params: dict[str, str] = field(default_factory=dict)
+    body: dict[str, Any] = field(default_factory=dict)

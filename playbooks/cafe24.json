@@ -7,6 +7,15 @@
     "orders",
     "sales_statistics"
   ],
+  "browser_actions": [
+    {
+      "type": "goto"
+    },
+    {
+      "type": "screenshot",
+      "path": "login_or_dashboard.png"
+    }
+  ],
   "notes": [
     "카페24 Admin API를 우선 사용한다.",
     "공동구매와 파트너스몰은 별도 mall id를 분리 관리한다."
