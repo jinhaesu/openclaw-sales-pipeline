@@ -10,6 +10,7 @@ from .base import BaseCollector
 class BrowserCollector(BaseCollector):
     def run_actions(self, page, output_dir: Path, job: Job) -> list[dict]:
         actions = job.playbook.browser_actions if job.playbook else []
+        credentials = self.channel_credentials.get(job.vendor_name)
         executed: list[dict] = []
         for action in actions:
             action_type = action.get("type")
@@ -20,6 +21,10 @@ class BrowserCollector(BaseCollector):
             elif action_type == "press":
                 page.keyboard.press(action.get("key", "Escape"))
                 executed.append({"type": "press", "key": action.get("key", "Escape")})
+            elif action_type == "eval":
+                expression = action.get("expression", "")
+                page.evaluate(expression)
+                executed.append({"type": "eval"})
             elif action_type == "click_text":
                 text = action.get("text", "")
                 exact = bool(action.get("exact", False))
@@ -36,6 +41,21 @@ class BrowserCollector(BaseCollector):
                 value = action.get("value", "")
                 page.get_by_label(label, exact=bool(action.get("exact", False))).fill(value, timeout=15000)
                 executed.append({"type": "fill_label", "label": label})
+            elif action_type == "fill_name":
+                name = action.get("name", "")
+                value = action.get("value", "")
+                page.locator(f'[name=\"{name}\"]').first.fill(value, timeout=15000)
+                executed.append({"type": "fill_name", "name": name})
+            elif action_type == "fill_credential":
+                name = action.get("name", "")
+                source = action.get("source", "")
+                value = credentials.get(source, "")
+                page.locator(f'[name=\"{name}\"]').first.fill(str(value), timeout=15000)
+                executed.append({"type": "fill_credential", "name": name, "source": source, "present": bool(value)})
+            elif action_type == "click_alt":
+                alt = action.get("alt", "")
+                page.get_by_alt_text(alt).first.click(timeout=15000)
+                executed.append({"type": "click_alt", "alt": alt})
             elif action_type == "screenshot":
                 path = output_dir / action.get("path", "page.png")
                 page.screenshot(path=str(path), full_page=True)

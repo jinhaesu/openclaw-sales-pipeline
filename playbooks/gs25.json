@@ -6,32 +6,43 @@
       "type": "goto"
     },
     {
-      "type": "press",
-      "key": "Escape"
+      "type": "eval",
+      "expression": "() => { try { if (typeof closePopEdge === 'function') closePopEdge(); if (typeof closePop === 'function') closePop(); } catch (e) {} }"
     },
     {
-      "type": "click_text",
-      "text": "부가정보"
+      "type": "fill_credential",
+      "name": "uid",
+      "source": "login_id"
     },
     {
-      "type": "click_text",
-      "text": "납품정보"
+      "type": "fill_credential",
+      "name": "empid",
+      "source": "login_id_2"
     },
     {
-      "type": "click_text",
-      "text": "기간별"
+      "type": "fill_credential",
+      "name": "bmbh",
+      "source": "password"
+    },
+    {
+      "type": "click_alt",
+      "alt": "LOGIN"
+    },
+    {
+      "type": "wait_for_timeout",
+      "ms": 2000
     },
     {
       "type": "screenshot",
-      "path": "landing.png"
+      "path": "after_login.png"
     },
     {
       "type": "note",
-      "message": "부가정보 > 납품정보 > 기간별로 이동하는 selector를 다음 단계에서 구체화한다."
+      "message": "로그인 후 프레임 구조와 메뉴 selector를 다음 단계에서 고정한다."
     }
   ],
   "notes": [
-    "초기 브라우저 플레이북",
-    "메뉴 텍스트 기반 selector 1차 적용"
+    "실화면 기준 로그인 자동화 1차 적용",
+    "로그인 후 메뉴 경로는 후속 프레임 탐색 필요"
   ]
 }

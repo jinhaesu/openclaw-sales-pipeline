@@ -23,6 +23,7 @@ class ChannelRecord:
 @dataclass
 class RuntimeConfig:
     master_path: str
+    channel_credentials_path: str
     artifact_root: str
     secrets_path: str
     session_state_root: str

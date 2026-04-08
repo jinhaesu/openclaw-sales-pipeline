@@ -1,5 +1,6 @@
 {
   "master_path": "/Users/joinerhs/.openclaw/workspace/analysis/sales_ops/channel_operations_master.json",
+  "channel_credentials_path": "/Users/joinerhs/.openclaw/workspace/analysis/sales_ops/channel_credentials.json",
   "artifact_root": "/Users/joinerhs/Documents/New project/run_outputs",
   "secrets_path": "/Users/joinerhs/Documents/New project/config/secrets.local.json",
   "session_state_root": "/Users/joinerhs/Documents/New project/run_outputs/browser_state",

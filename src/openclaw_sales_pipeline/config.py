@@ -11,6 +11,7 @@ def load_runtime_config(path: Path) -> RuntimeConfig:
         raw = json.load(handle)
     return RuntimeConfig(
         master_path=raw["master_path"],
+        channel_credentials_path=raw["channel_credentials_path"],
         artifact_root=raw["artifact_root"],
         secrets_path=raw["secrets_path"],
         session_state_root=raw["session_state_root"],

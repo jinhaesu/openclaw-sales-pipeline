@@ -5,12 +5,14 @@ from pathlib import Path
 
 from ..models import Job, JobResult, RuntimeConfig
 from ..secrets import SecretStore
+from ..channel_credentials import ChannelCredentialStore
 
 
 class BaseCollector(ABC):
-    def __init__(self, cfg: RuntimeConfig, secrets: SecretStore) -> None:
+    def __init__(self, cfg: RuntimeConfig, secrets: SecretStore, channel_credentials: ChannelCredentialStore) -> None:
         self.cfg = cfg
         self.secrets = secrets
+        self.channel_credentials = channel_credentials
 
     @abstractmethod
     def collect(self, job: Job, dry_run: bool) -> JobResult:
