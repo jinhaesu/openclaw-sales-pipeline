@@ -1,0 +1,14 @@
+{
+  "vendor_name": "스마트스토어",
+  "strategy": "api",
+  "api_provider": "naver_commerce",
+  "preferred_dataset": [
+    "orders",
+    "settlements",
+    "sales_summary"
+  ],
+  "notes": [
+    "네이버 커머스API를 우선 사용한다.",
+    "정산과 주문 데이터를 결합해 순매출 기준을 맞춘다."
+  ]
+}

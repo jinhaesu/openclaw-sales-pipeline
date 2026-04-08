@@ -1,0 +1,13 @@
+{
+  "vendor_name": "쿠팡 WING",
+  "strategy": "api",
+  "api_provider": "coupang_open_api",
+  "preferred_dataset": [
+    "orders",
+    "vendor_sales"
+  ],
+  "notes": [
+    "WING API 키와 vendorId가 필요하다.",
+    "로켓프레시는 권한 범위가 다를 수 있으니 별도 확인한다."
+  ]
+}

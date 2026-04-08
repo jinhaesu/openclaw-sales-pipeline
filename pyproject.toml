@@ -1,0 +1,8 @@
+[project]
+name = "openclaw-sales-pipeline"
+version = "0.1.0"
+description = "Parallel sales collection orchestrator for OpenClaw-managed sales channels."
+requires-python = ">=3.9"
+
+[project.scripts]
+openclaw-sales = "src.openclaw_sales_pipeline.cli:main"

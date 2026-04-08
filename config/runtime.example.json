@@ -1,0 +1,9 @@
+{
+  "master_path": "/Users/joinerhs/.openclaw/workspace/analysis/sales_ops/channel_operations_master.json",
+  "artifact_root": "/Users/joinerhs/Documents/New project/run_outputs",
+  "api_concurrency": 6,
+  "browser_concurrency": 2,
+  "manual_concurrency": 1,
+  "default_strategy": "browser_download",
+  "playbook_dir": "/Users/joinerhs/Documents/New project/playbooks"
+}

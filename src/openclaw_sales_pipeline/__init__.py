@@ -1,0 +1,1 @@
+"""OpenClaw sales pipeline package."""
