@@ -1,0 +1,13 @@
+{
+  "vendor_name": "알리익스프레스",
+  "strategy": "browser_download",
+  "analysis_profile": {
+    "mode": "download_then_analyze",
+    "product_header_candidates": ["상품명", "품목명", "product name"],
+    "qty_header_candidates": ["수량", "quantity", "주문수량"],
+    "sales_header_candidates": ["주문금액", "order amount", "판매금액"]
+  },
+  "notes": [
+    "주문 일괄 내보내기 후 주문종료 행만 집계"
+  ]
+}

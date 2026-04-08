@@ -30,19 +30,40 @@
     },
     {
       "type": "wait_for_timeout",
+      "ms": 2500
+    },
+    {
+      "type": "click_text",
+      "text": "부가정보"
+    },
+    {
+      "type": "wait_for_timeout",
+      "ms": 2500
+    },
+    {
+      "type": "click_text_in_frame",
+      "frame_url_contains": "MainFrame.jsp",
+      "text": "납품정보"
+    },
+    {
+      "type": "wait_for_timeout",
       "ms": 2000
     },
     {
+      "type": "assert_frame_url_contains",
+      "url_contains": "NaPeriod.jsp"
+    },
+    {
       "type": "screenshot",
-      "path": "after_login.png"
+      "path": "na_period.png"
     },
     {
       "type": "note",
-      "message": "로그인 후 프레임 구조와 메뉴 selector를 다음 단계에서 고정한다."
+      "message": "부가정보 > 납품정보 > 기간별 화면까지 도달한 뒤 다운로드 selector를 추가한다."
     }
   ],
   "notes": [
-    "실화면 기준 로그인 자동화 1차 적용",
-    "로그인 후 메뉴 경로는 후속 프레임 탐색 필요"
+    "실화면 기준 로그인 자동화 적용",
+    "부가정보 > 납품정보 > 기간별 프레임 진입 확인"
   ]
 }

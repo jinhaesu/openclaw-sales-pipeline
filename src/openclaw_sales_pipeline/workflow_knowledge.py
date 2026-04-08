@@ -37,6 +37,7 @@ def build_workflow_knowledge(master_path: Path, playbook_dir: Path) -> dict[str,
                 "video_files": [item.get("file_path") for item in video_support.get("files", [])],
                 "playbook_strategy": playbook.get("strategy"),
                 "playbook_actions": len(playbook.get("browser_actions", [])),
+                "analysis_profile": playbook.get("analysis_profile", {}),
                 "optimization_hints": build_hints(row, playbook),
             }
         )
@@ -60,6 +61,8 @@ def build_hints(row: dict[str, Any], playbook: dict[str, Any]) -> list[str]:
         hints.append("playbook_available")
     if row.get("video_support", {}).get("has_video"):
         hints.append("video_reference_available")
+    if playbook.get("analysis_profile", {}).get("mode") == "download_then_analyze":
+        hints.append("auto_file_analysis_ready")
     if "OTP" in notes or "인증" in notes:
         hints.append("authentication_step_present")
     return hints

@@ -1,0 +1,13 @@
+{
+  "vendor_name": "B마트",
+  "strategy": "browser_download",
+  "analysis_profile": {
+    "mode": "download_then_analyze",
+    "product_header_candidates": ["상품명", "품목명", "메뉴명"],
+    "qty_header_candidates": ["수량", "주문수량", "판매수량"],
+    "sales_header_candidates": ["판매금액", "매출액", "주문금액"]
+  },
+  "notes": [
+    "엑셀요청목록 다운로드 후 품목별 판매량/매출 자동 분석"
+  ]
+}

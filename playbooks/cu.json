@@ -6,31 +6,76 @@
       "type": "goto"
     },
     {
-      "type": "press",
-      "key": "Escape"
+      "type": "type_selector",
+      "selector": "#textfield-1023-inputEl",
+      "source": "client_id"
+    },
+    {
+      "type": "type_selector",
+      "selector": "#textfield-1025-inputEl",
+      "source": "id"
+    },
+    {
+      "type": "type_selector",
+      "selector": "#textfield-1027-inputEl",
+      "source": "pw"
+    },
+    {
+      "type": "eval_dump",
+      "path": "ext_fields_before_login.json",
+      "expression": "() => { try { const items = window.Ext ? Ext.ComponentQuery.query('textfield') : []; return items.map((c) => ({ id: c.getId && c.getId(), name: c.name || '', inputId: c.inputId || '', value: c.getValue ? c.getValue() : null })); } catch (e) { return { error: String(e) }; } }"
+    },
+    {
+      "type": "click_text",
+      "text": "LOGIN"
+    },
+    {
+      "type": "wait_for_timeout",
+      "ms": 4000
+    },
+    {
+      "type": "eval_dump",
+      "path": "ext_fields_after_login.json",
+      "expression": "() => { try { const items = window.Ext ? Ext.ComponentQuery.query('textfield') : []; const msg = document.querySelector('#messagebox-1001-displayfield-inputEl')?.textContent?.trim() || ''; return { fields: items.map((c) => ({ id: c.getId && c.getId(), name: c.name || '', inputId: c.inputId || '', value: c.getValue ? c.getValue() : null })), message: msg }; } catch (e) { return { error: String(e) }; } }"
+    },
+    {
+      "type": "screenshot",
+      "path": "after_login.png"
     },
     {
       "type": "click_text",
       "text": "센터공급"
     },
     {
-      "type": "click_text",
-      "text": "납품내역집계"
-    },
-    {
-      "type": "click_text",
-      "text": "물류-상세내역"
+      "type": "wait_for_timeout",
+      "ms": 2500
     },
     {
       "type": "screenshot",
-      "path": "landing.png"
+      "path": "center_supply.png"
+    },
+    {
+      "type": "click_text",
+      "text": "납입 내역 집계"
+    },
+    {
+      "type": "wait_for_timeout",
+      "ms": 2500
+    },
+    {
+      "type": "screenshot",
+      "path": "delivery_summary.png"
     },
     {
       "type": "note",
-      "message": "센터공급 > 납품내역집계 selector를 추후 추가한다."
+      "message": "로그인 후 센터공급 > 납입 내역 집계까지 자동화하고 최종 상세 selector를 후속 고정한다."
     }
   ],
   "notes": [
-    "텍스트 클릭 기반 메뉴 경로 1차 적용"
-  ]
+    "CU 로그인 필드 실화면 selector 적용",
+    "post-login 메뉴는 discovery 결과 기준으로 후속 고정"
+  ],
+  "metadata": {
+    "reuse_session_state": false
+  }
 }

@@ -6,32 +6,42 @@
       "type": "goto"
     },
     {
-      "type": "press",
-      "key": "Escape"
+      "type": "fill_selector",
+      "selector": "#login-groupId",
+      "source": "client_id"
     },
     {
-      "type": "click_text",
-      "text": "유통SCM"
+      "type": "fill_selector",
+      "selector": "#login-userId",
+      "source": "id"
     },
     {
-      "type": "click_text",
-      "text": "부가정보"
+      "type": "fill_selector",
+      "selector": "#login-password",
+      "source": "pw"
     },
     {
-      "type": "click_text",
-      "text": "매입"
+      "type": "wait_for_timeout",
+      "ms": 1000
     },
     {
       "type": "screenshot",
-      "path": "login.png"
+      "path": "preauth_ready.png"
     },
     {
       "type": "note",
-      "message": "휴대폰 인증 이후 유통SCM > 부가정보 > 매입 경로 selector를 추가한다."
+      "message": "인증 전 단계까지 자동 입력 완료. 휴대폰 인증 후 세션이 저장되면 discovery에서 post-auth 메뉴를 재사용한다."
     }
   ],
   "notes": [
     "휴대폰 인증 채널",
-    "세션 유지가 가장 중요하다."
-  ]
+    "세션 유지가 가장 중요하다.",
+    "pre-auth와 post-auth discovery를 분리 운영한다."
+  ],
+  "metadata": {
+    "discovery_split": {
+      "pre_auth_complete": true,
+      "post_auth_requires": "sms_code_or_existing_session"
+    }
+  }
 }

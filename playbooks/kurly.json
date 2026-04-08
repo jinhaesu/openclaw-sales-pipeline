@@ -1,0 +1,13 @@
+{
+  "vendor_name": "컬리",
+  "strategy": "browser_download",
+  "analysis_profile": {
+    "mode": "download_then_analyze",
+    "product_header_candidates": ["상품명", "품목명", "상품"],
+    "qty_header_candidates": ["수량", "발주수량", "판매수량"],
+    "sales_header_candidates": ["판매금액", "매출액", "공급가"]
+  },
+  "notes": [
+    "발주내역 다운로드 후 품목별 판매량/매출 요약"
+  ]
+}

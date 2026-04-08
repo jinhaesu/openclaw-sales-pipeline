@@ -1,0 +1,13 @@
+{
+  "vendor_name": "올웨이즈",
+  "strategy": "browser_download",
+  "analysis_profile": {
+    "mode": "download_then_analyze",
+    "product_header_candidates": ["상품명", "품목명", "상품"],
+    "qty_header_candidates": ["수량", "주문수량", "판매수량"],
+    "sales_header_candidates": ["상품구매금액", "판매금액", "매출액"]
+  },
+  "notes": [
+    "취소/반품 행 제거 후 상품구매금액 기준 품목별 분석"
+  ]
+}

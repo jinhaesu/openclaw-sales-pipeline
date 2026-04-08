@@ -1,0 +1,14 @@
+{
+  "vendor_name": "베네피아",
+  "strategy": "browser_download",
+  "analysis_profile": {
+    "mode": "download_then_analyze",
+    "product_header_candidates": ["상품명", "품목명", "상품"],
+    "qty_header_candidates": ["수량", "주문수량", "판매수량"],
+    "sales_header_candidates": ["공급가", "공급가 합", "판매금액"]
+  },
+  "notes": [
+    "엑셀 다운로드 후 공급가 합 기준으로 매출 집계",
+    "분석기는 다운로드 파일을 품목별 판매량/매출로 바로 요약한다."
+  ]
+}
