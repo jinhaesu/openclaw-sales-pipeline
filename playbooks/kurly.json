@@ -7,6 +7,10 @@
     "qty_header_candidates": ["수량", "발주수량", "판매수량"],
     "sales_header_candidates": ["판매금액", "매출액", "공급가"]
   },
+  "postprocess_rules": {
+    "drop_footer_keywords": ["합계", "총계", "소계"],
+    "exclude_product_keywords": ["배송비"]
+  },
   "notes": [
     "발주내역 다운로드 후 품목별 판매량/매출 요약"
   ]

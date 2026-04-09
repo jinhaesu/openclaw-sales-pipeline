@@ -86,9 +86,12 @@ def ingest_downloads(
                 "channel_group": channel.channel_group if channel else "",
                 "manager": channel.manager if channel else "",
             }
+            profile = dict(playbook.analysis_profile) if playbook else {}
+            if playbook and playbook.postprocess_rules:
+                profile["postprocess_rules"] = dict(playbook.postprocess_rules)
             analysis = analyze_sales_file(
                 path=target_path,
-                profile=playbook.analysis_profile if playbook else {},
+                profile=profile,
                 context=context,
             )
             analysis_path = target_path.with_name(f"{target_path.stem}_analysis.json")

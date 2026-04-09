@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from .standards import build_channel_output_contract, build_standards_bundle, merge_postprocess_rules
+
 
 def build_workflow_knowledge(master_path: Path, playbook_dir: Path) -> dict[str, Any]:
     with master_path.open("r", encoding="utf-8") as handle:
@@ -38,11 +40,17 @@ def build_workflow_knowledge(master_path: Path, playbook_dir: Path) -> dict[str,
                 "playbook_strategy": playbook.get("strategy"),
                 "playbook_actions": len(playbook.get("browser_actions", [])),
                 "analysis_profile": playbook.get("analysis_profile", {}),
+                "postprocess_rules": merge_postprocess_rules(
+                    playbook.get("analysis_profile", {}),
+                    playbook.get("postprocess_rules", {}),
+                ),
+                "channel_output_contract": build_channel_output_contract(),
                 "optimization_hints": build_hints(row, playbook),
             }
         )
 
     return {
+        "standards": build_standards_bundle(),
         "channel_count": master.get("channel_count", len(items)),
         "video_supported_count": master.get("video_supported_count", 0),
         "items": items,
@@ -63,6 +71,7 @@ def build_hints(row: dict[str, Any], playbook: dict[str, Any]) -> list[str]:
         hints.append("video_reference_available")
     if playbook.get("analysis_profile", {}).get("mode") == "download_then_analyze":
         hints.append("auto_file_analysis_ready")
+        hints.append("standardized_channel_output")
     if "OTP" in notes or "인증" in notes:
         hints.append("authentication_step_present")
     return hints

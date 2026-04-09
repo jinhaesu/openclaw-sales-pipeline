@@ -7,6 +7,10 @@
     "qty_header_candidates": ["수량", "주문수량", "판매수량"],
     "sales_header_candidates": ["공급가", "공급가 합", "판매금액"]
   },
+  "postprocess_rules": {
+    "drop_footer_keywords": ["합계", "총계", "소계"],
+    "exclude_product_keywords": ["배송비", "포인트", "쿠폰"]
+  },
   "notes": [
     "엑셀 다운로드 후 공급가 합 기준으로 매출 집계",
     "분석기는 다운로드 파일을 품목별 판매량/매출로 바로 요약한다."

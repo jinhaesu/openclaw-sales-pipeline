@@ -7,6 +7,10 @@
     "qty_header_candidates": ["수량", "quantity", "주문수량"],
     "sales_header_candidates": ["주문금액", "order amount", "판매금액"]
   },
+  "postprocess_rules": {
+    "include_status_keywords": ["주문종료", "completed", "finished"],
+    "drop_footer_keywords": ["합계", "총계", "subtotal", "total"]
+  },
   "notes": [
     "주문 일괄 내보내기 후 주문종료 행만 집계"
   ]

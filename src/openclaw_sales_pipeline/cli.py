@@ -13,6 +13,7 @@ from .ingest import ingest_downloads
 from .orchestrator import build_jobs, execute_jobs, summarize_jobs
 from .reporting import build_report_bundle, validate_smtp_profile
 from .secrets import SecretStore
+from .standards import build_standards_bundle
 from .workflow_knowledge import build_workflow_knowledge, write_workflow_knowledge
 
 
@@ -43,6 +44,13 @@ def parse_args() -> argparse.Namespace:
         "--output",
         default="artifacts/workflow_knowledge.json",
         help="Output JSON path",
+    )
+
+    standards_parser = subparsers.add_parser("export-standards", help="Export channel output contract, postprocess rules, and product analysis schema")
+    standards_parser.add_argument(
+        "--output-dir",
+        default="artifacts/standards",
+        help="Directory to write standards JSON files",
     )
 
     analyze_parser = subparsers.add_parser("analyze-file", help="Analyze downloaded sales Excel/CSV file")
@@ -109,6 +117,22 @@ def main() -> None:
         output_path = Path(args.output).expanduser()
         write_workflow_knowledge(output_path, knowledge)
         print(json.dumps({"output": str(output_path.resolve()), "channel_count": knowledge["channel_count"]}, ensure_ascii=False, indent=2))
+        return
+
+    if args.command == "export-standards":
+        output_dir = Path(args.output_dir).expanduser()
+        output_dir.mkdir(parents=True, exist_ok=True)
+        standards = build_standards_bundle()
+        outputs = {}
+        bundle_path = output_dir / "standards_bundle.json"
+        bundle_path.write_text(json.dumps(standards, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        outputs["standards_bundle"] = str(bundle_path.resolve())
+        for name in ("channel_output_contract", "excel_postprocess_ruleset", "product_analysis_master_schema"):
+            payload = standards[name]
+            file_path = output_dir / f"{name}.json"
+            file_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            outputs[name] = str(file_path.resolve())
+        print(json.dumps({"version": standards["version"], "outputs": outputs}, ensure_ascii=False, indent=2))
         return
 
     if args.command == "analyze-file":

@@ -45,6 +45,7 @@ class Playbook:
     browser_actions: list[dict[str, Any]] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
     analysis_profile: dict[str, Any] = field(default_factory=dict)
+    postprocess_rules: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass

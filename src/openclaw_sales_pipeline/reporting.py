@@ -15,6 +15,12 @@ from openpyxl.styles import Font, PatternFill
 from .excel_analysis import analyze_sales_file
 from .models import ChannelRecord, Playbook
 from .secrets import SecretStore
+from .standards import (
+    CHANNEL_OUTPUT_CONTRACT_ID,
+    EXCEL_POSTPROCESS_RULESET_ID,
+    PRODUCT_ANALYSIS_MASTER_SCHEMA_ID,
+    build_standards_bundle,
+)
 
 
 SUPPORTED_SOURCE_SUFFIXES = {".xlsx", ".xlsm", ".csv", ".txt"}
@@ -65,6 +71,7 @@ def build_report_bundle(
 
     report = {
         "label": report_label,
+        "standards": build_standards_bundle(),
         "source_count": len(sources),
         "analysis_count": len(analyses),
         "record_count": len(records),
@@ -115,6 +122,11 @@ def build_report_bundle(
             "summary_json": str(summary_json_path.resolve()),
             "manifest": str(manifest_output_path.resolve()),
             "email_draft": str(draft_path.resolve()),
+        },
+        "standards": {
+            "channel_output_contract_id": CHANNEL_OUTPUT_CONTRACT_ID,
+            "excel_postprocess_ruleset_id": EXCEL_POSTPROCESS_RULESET_ID,
+            "product_analysis_master_schema_id": PRODUCT_ANALYSIS_MASTER_SCHEMA_ID,
         },
         "smtp_status": smtp_status,
         "sent_email": sent,
@@ -263,6 +275,8 @@ def analyze_sources(
                     record["business_date"] = source.get("business_date", "")
                 if not record.get("business_month") and record.get("business_date"):
                     record["business_month"] = str(record["business_date"])[:7]
+                if not record.get("normalized_product_name"):
+                    record["normalized_product_name"] = record.get("product_name", "(unknown)")
                 records.append(record)
             if not records and raw.get("items"):
                 for item in raw["items"]:
@@ -275,12 +289,28 @@ def analyze_sources(
                             "business_month": source.get("business_date", "")[:7] if source.get("business_date") else "",
                             "status": "",
                             "product_name": item.get("product_name", "(unknown)"),
+                            "normalized_product_name": item.get("normalized_product_name", item.get("product_name", "(unknown)")),
                             "qty": float(item.get("qty", 0) or 0),
                             "sales": float(item.get("sales", 0) or 0),
                             "source_file": str(path),
                         }
                     )
             analysis = {
+                "output_type": raw.get("output_type", "channel_sales_analysis"),
+                "format_version": raw.get("format_version", "2026-04-09"),
+                "channel_output_contract_id": raw.get("channel_output_contract_id", CHANNEL_OUTPUT_CONTRACT_ID),
+                "product_analysis_master_schema_id": raw.get(
+                    "product_analysis_master_schema_id",
+                    PRODUCT_ANALYSIS_MASTER_SCHEMA_ID,
+                ),
+                "excel_postprocess_ruleset_id": raw.get(
+                    "excel_postprocess_ruleset_id",
+                    EXCEL_POSTPROCESS_RULESET_ID,
+                ),
+                "metadata": raw.get("metadata", {}),
+                "channel_summary": raw.get("channel_summary", {}),
+                "applied_postprocess_rules": raw.get("applied_postprocess_rules", {}),
+                "quality": raw.get("quality", {}),
                 "vendor_name": vendor_name,
                 "business_date": source.get("business_date", ""),
                 "file": str(path),
@@ -295,41 +325,57 @@ def analyze_sources(
         else:
             analysis = analyze_sales_file(
                 path=path,
-                profile=playbook.analysis_profile if playbook else {},
+                profile=build_analysis_profile(playbook),
                 context=context,
             )
         analyses.append(analysis)
     return analyses
 
 
+def build_analysis_profile(playbook: Playbook | None) -> dict[str, Any]:
+    if not playbook:
+        return {}
+    profile = dict(playbook.analysis_profile)
+    if playbook.postprocess_rules:
+        profile["postprocess_rules"] = dict(playbook.postprocess_rules)
+    return profile
+
+
 def aggregate_records(records: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
     daily_channel: dict[tuple[str, str], dict[str, float]] = defaultdict(lambda: {"qty": 0.0, "sales": 0.0})
     monthly_channel: dict[tuple[str, str], dict[str, float]] = defaultdict(lambda: {"qty": 0.0, "sales": 0.0})
-    product_totals: dict[str, dict[str, Any]] = defaultdict(lambda: {"qty": 0.0, "sales": 0.0, "channels": set()})
+    product_totals: dict[str, dict[str, Any]] = defaultdict(
+        lambda: {"qty": 0.0, "sales": 0.0, "channels": set(), "display_name": ""}
+    )
     channel_product: dict[tuple[str, str], dict[str, float]] = defaultdict(lambda: {"qty": 0.0, "sales": 0.0})
     daily_product: dict[tuple[str, str], dict[str, float]] = defaultdict(lambda: {"qty": 0.0, "sales": 0.0})
+    product_names: dict[str, str] = {}
 
     for record in records:
         vendor_name = str(record.get("vendor_name", ""))
         business_date = str(record.get("business_date", ""))
         business_month = str(record.get("business_month", ""))
-        product_name = str(record.get("product_name", "(unknown)"))
+        product_key = str(record.get("normalized_product_name") or record.get("product_name", "(unknown)"))
+        product_name = str(record.get("product_name", product_key))
         qty = float(record.get("qty", 0) or 0)
         sales = float(record.get("sales", 0) or 0)
 
         if business_date:
             daily_channel[(business_date, vendor_name)]["qty"] += qty
             daily_channel[(business_date, vendor_name)]["sales"] += sales
-            daily_product[(business_date, product_name)]["qty"] += qty
-            daily_product[(business_date, product_name)]["sales"] += sales
+            daily_product[(business_date, product_key)]["qty"] += qty
+            daily_product[(business_date, product_key)]["sales"] += sales
         if business_month:
             monthly_channel[(business_month, vendor_name)]["qty"] += qty
             monthly_channel[(business_month, vendor_name)]["sales"] += sales
-        product_totals[product_name]["qty"] += qty
-        product_totals[product_name]["sales"] += sales
-        product_totals[product_name]["channels"].add(vendor_name)
-        channel_product[(vendor_name, product_name)]["qty"] += qty
-        channel_product[(vendor_name, product_name)]["sales"] += sales
+        product_totals[product_key]["qty"] += qty
+        product_totals[product_key]["sales"] += sales
+        product_totals[product_key]["channels"].add(vendor_name)
+        if not product_totals[product_key]["display_name"]:
+            product_totals[product_key]["display_name"] = product_name
+        product_names[product_key] = product_totals[product_key]["display_name"] or product_name
+        channel_product[(vendor_name, product_key)]["qty"] += qty
+        channel_product[(vendor_name, product_key)]["sales"] += sales
 
     return {
         "daily_channel_sales": sort_rows(
@@ -349,7 +395,8 @@ def aggregate_records(records: list[dict[str, Any]]) -> dict[str, list[dict[str,
         "product_sales": sorted(
             [
                 {
-                    "product_name": key,
+                    "product_name": value["display_name"] or key,
+                    "normalized_product_name": key,
                     "sales": round(value["sales"], 2),
                     "qty": round(value["qty"], 2),
                     "channel_count": len(value["channels"]),
@@ -361,7 +408,8 @@ def aggregate_records(records: list[dict[str, Any]]) -> dict[str, list[dict[str,
         "product_qty": sorted(
             [
                 {
-                    "product_name": key,
+                    "product_name": value["display_name"] or key,
+                    "normalized_product_name": key,
                     "qty": round(value["qty"], 2),
                     "sales": round(value["sales"], 2),
                     "channel_count": len(value["channels"]),
@@ -374,7 +422,8 @@ def aggregate_records(records: list[dict[str, Any]]) -> dict[str, list[dict[str,
             [
                 {
                     "vendor_name": key[0],
-                    "product_name": key[1],
+                    "product_name": product_names.get(key[1], key[1]),
+                    "normalized_product_name": key[1],
                     "qty": round(value["qty"], 2),
                     "sales": round(value["sales"], 2),
                 }
@@ -386,7 +435,8 @@ def aggregate_records(records: list[dict[str, Any]]) -> dict[str, list[dict[str,
             [
                 {
                     "business_date": key[0],
-                    "product_name": key[1],
+                    "product_name": product_names.get(key[1], key[1]),
+                    "normalized_product_name": key[1],
                     "qty": round(value["qty"], 2),
                     "sales": round(value["sales"], 2),
                 }
@@ -430,6 +480,16 @@ def export_report_workbook(path: Path, report: dict[str, Any]) -> None:
             {"metric": "total_qty", "value": report["summary"]["total_qty"]},
             {"metric": "channel_count", "value": report["summary"]["channel_count"]},
             {"metric": "date_count", "value": report["summary"]["date_count"]},
+        ],
+    )
+    add_sheet(
+        workbook,
+        "Standards",
+        [
+            {"metric": "channel_output_contract_id", "value": CHANNEL_OUTPUT_CONTRACT_ID},
+            {"metric": "excel_postprocess_ruleset_id", "value": EXCEL_POSTPROCESS_RULESET_ID},
+            {"metric": "product_analysis_master_schema_id", "value": PRODUCT_ANALYSIS_MASTER_SCHEMA_ID},
+            {"metric": "group_by", "value": "normalized_product_name"},
         ],
     )
     add_sheet(
@@ -510,6 +570,7 @@ def build_summary_markdown(report: dict[str, Any]) -> str:
             "## 첨부",
             "- 엑셀 리포트: 일별/월별 채널 매출, 품목별 매출, 품목별 판매량, 채널별 품목 매출 포함",
             "- 요약 문서: 상위 채널/품목, 전체 합계 포함",
+            "- 품목 집계 기준: normalized_product_name 마스터 스키마 적용",
         ]
     )
     return "\n".join(lines) + "\n"

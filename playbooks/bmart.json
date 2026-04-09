@@ -7,6 +7,10 @@
     "qty_header_candidates": ["수량", "주문수량", "판매수량"],
     "sales_header_candidates": ["판매금액", "매출액", "주문금액"]
   },
+  "postprocess_rules": {
+    "drop_footer_keywords": ["합계", "총계", "소계"],
+    "exclude_status_keywords": ["취소", "환불"]
+  },
   "notes": [
     "엑셀요청목록 다운로드 후 품목별 판매량/매출 자동 분석"
   ]

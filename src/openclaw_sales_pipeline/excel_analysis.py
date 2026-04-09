@@ -2,12 +2,22 @@ from __future__ import annotations
 
 import csv
 import json
+import re
 from collections import defaultdict
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
 from openpyxl import load_workbook
+
+from .standards import (
+    CHANNEL_OUTPUT_CONTRACT_ID,
+    EXCEL_POSTPROCESS_RULESET_ID,
+    PRODUCT_ANALYSIS_MASTER_SCHEMA_ID,
+    build_channel_output_contract,
+    build_product_analysis_master_schema,
+    merge_postprocess_rules,
+)
 
 
 HEADER_CANDIDATES = {
@@ -29,15 +39,56 @@ def analyze_sales_file(
     rows = load_rows(path)
     header_index, headers = detect_header(rows)
     records = rows_to_dicts(rows[header_index + 1 :], headers)
-    normalized = normalize_records(records, profile=profile, context=context, source_path=path)
+    applied_rules = merge_postprocess_rules(profile)
+    normalized, quality = normalize_records(
+        records,
+        profile=profile,
+        context=context,
+        source_path=path,
+        applied_rules=applied_rules,
+    )
     summary = summarize_by_product(normalized)
+    totals = summarize_totals(normalized)
+    channel_summary = {
+        "vendor_name": context.get("vendor_name", ""),
+        "business_date": context.get("business_date", ""),
+        "business_month": (context.get("business_date", "") or "")[:7],
+        "row_count": len(normalized),
+        "product_count": len(summary),
+        "total_qty": totals["qty"],
+        "total_sales": totals["sales"],
+        "source_file": str(path),
+    }
     return {
+        "output_type": "channel_sales_analysis",
+        "format_version": "2026-04-09",
+        "channel_output_contract_id": CHANNEL_OUTPUT_CONTRACT_ID,
+        "product_analysis_master_schema_id": PRODUCT_ANALYSIS_MASTER_SCHEMA_ID,
+        "excel_postprocess_ruleset_id": EXCEL_POSTPROCESS_RULESET_ID,
+        "metadata": {
+            "vendor_name": context.get("vendor_name", ""),
+            "channel_group": context.get("channel_group", ""),
+            "manager": context.get("manager", ""),
+            "business_date": context.get("business_date", ""),
+            "source_file": str(path),
+        },
+        "channel_summary": channel_summary,
+        "applied_postprocess_rules": applied_rules,
+        "quality": {
+            "header_row_index": header_index,
+            "detected_headers": headers,
+            **quality,
+        },
+        "schemas": {
+            "channel_output_contract": build_channel_output_contract(),
+            "product_analysis_master_schema": build_product_analysis_master_schema(),
+        },
         "file": str(path),
         "vendor_name": context.get("vendor_name"),
         "business_date": context.get("business_date"),
         "row_count": len(normalized),
         "product_count": len(summary),
-        "totals": summarize_totals(normalized),
+        "totals": totals,
         "items": summary,
         "records": normalized,
     }
@@ -86,13 +137,26 @@ def normalize_records(
     profile: dict[str, Any] | None = None,
     context: dict[str, Any] | None = None,
     source_path: Path | None = None,
-) -> list[dict[str, Any]]:
+    applied_rules: dict[str, Any] | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
     profile = profile or {}
     context = context or {}
     header_candidates = build_header_candidates(profile)
-    exclude_status_keywords = [str(item).strip().lower() for item in profile.get("exclude_status_keywords", [])]
-    exclude_product_keywords = [str(item).strip().lower() for item in profile.get("exclude_product_keywords", [])]
+    applied_rules = applied_rules or merge_postprocess_rules(profile)
+    exclude_status_keywords = [str(item).strip().lower() for item in applied_rules.get("exclude_status_keywords", [])]
+    include_status_keywords = [str(item).strip().lower() for item in applied_rules.get("include_status_keywords", [])]
+    exclude_product_keywords = [str(item).strip().lower() for item in applied_rules.get("exclude_product_keywords", [])]
+    footer_keywords = [str(item).strip().lower() for item in applied_rules.get("drop_footer_keywords", [])]
     normalized = []
+    stats = {
+        "input_row_count": len(records),
+        "kept_row_count": 0,
+        "dropped_empty_rows": 0,
+        "dropped_footer_rows": 0,
+        "dropped_status_rows": 0,
+        "dropped_product_rows": 0,
+        "missing_date_rows": 0,
+    }
     for record in records:
         product = first_value(record, header_candidates["product"])
         qty = to_number(first_value(record, header_candidates["qty"]))
@@ -100,12 +164,27 @@ def normalize_records(
         status = normalize_text(first_value(record, header_candidates["status"]))
         business_date = to_iso_date(first_value(record, header_candidates["date"])) or context.get("business_date")
         if not product and qty == 0 and sales == 0:
+            stats["dropped_empty_rows"] += 1
             continue
         product_name = str(product).strip() if product is not None else "(unknown)"
-        if exclude_status_keywords and any(keyword in status.lower() for keyword in exclude_status_keywords if keyword):
+        if footer_keywords and contains_keyword(product_name, footer_keywords):
+            stats["dropped_footer_rows"] += 1
             continue
-        if exclude_product_keywords and any(keyword in product_name.lower() for keyword in exclude_product_keywords if keyword):
+        if exclude_status_keywords and contains_keyword(status, exclude_status_keywords):
+            stats["dropped_status_rows"] += 1
             continue
+        if include_status_keywords and not contains_keyword(status, include_status_keywords):
+            stats["dropped_status_rows"] += 1
+            continue
+        if exclude_product_keywords and contains_keyword(product_name, exclude_product_keywords):
+            stats["dropped_product_rows"] += 1
+            continue
+        normalized_product_name = normalize_product_name(product_name, applied_rules)
+        if not normalized_product_name:
+            stats["dropped_product_rows"] += 1
+            continue
+        if not business_date:
+            stats["missing_date_rows"] += 1
         normalized.append(
             {
                 "vendor_name": context.get("vendor_name", ""),
@@ -115,13 +194,15 @@ def normalize_records(
                 "business_month": business_date[:7] if business_date else "",
                 "status": status,
                 "product_name": product_name,
+                "normalized_product_name": normalized_product_name,
                 "qty": qty,
                 "sales": sales,
                 "source_file": str(source_path) if source_path else "",
                 "raw": record,
             }
         )
-    return normalized
+        stats["kept_row_count"] += 1
+    return normalized, stats
 
 
 def first_value(record: dict[str, Any], candidates: list[str]) -> Any:
@@ -167,6 +248,25 @@ def normalize_text(value: Any) -> str:
     return str(value).strip()
 
 
+def contains_keyword(value: str, keywords: list[str]) -> bool:
+    lowered = normalize_text(value).lower()
+    return any(keyword and keyword in lowered for keyword in keywords)
+
+
+def normalize_product_name(value: str, rules: dict[str, Any]) -> str:
+    text = normalize_text(value)
+    if not text:
+        return ""
+    aliases = {str(key): str(val) for key, val in rules.get("product_name_aliases", {}).items()}
+    if text in aliases:
+        text = aliases[text]
+    if rules.get("strip_bracket_suffixes"):
+        text = re.sub(r"\s*[\(\[].*?[\)\]]\s*$", "", text)
+    if rules.get("normalize_whitespace", True):
+        text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
 def to_iso_date(value: Any) -> str:
     if value in (None, ""):
         return ""
@@ -190,13 +290,20 @@ def to_iso_date(value: Any) -> str:
 
 
 def summarize_by_product(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    bucket: dict[str, dict[str, float]] = defaultdict(lambda: {"qty": 0.0, "sales": 0.0})
+    bucket: dict[str, dict[str, Any]] = defaultdict(lambda: {"qty": 0.0, "sales": 0.0, "display_name": ""})
     for record in records:
-        key = record["product_name"]
+        key = record.get("normalized_product_name") or record["product_name"]
         bucket[key]["qty"] += record["qty"]
         bucket[key]["sales"] += record["sales"]
+        if not bucket[key]["display_name"]:
+            bucket[key]["display_name"] = record["product_name"]
     items = [
-        {"product_name": key, "qty": round(value["qty"], 2), "sales": round(value["sales"], 2)}
+        {
+            "product_name": value["display_name"] or key,
+            "normalized_product_name": key,
+            "qty": round(value["qty"], 2),
+            "sales": round(value["sales"], 2),
+        }
         for key, value in bucket.items()
     ]
     items.sort(key=lambda item: (-item["sales"], item["product_name"]))

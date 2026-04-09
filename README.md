@@ -14,6 +14,9 @@ OpenClaw가 이미 가지고 있는 채널 마스터를 읽어서, 판매 채널
 - 채널별 실행 전략 분류기
 - 병렬 실행 계획기
 - 공통 결과 스키마
+- 채널별 출력 포맷 계약
+- 엑셀 다운로드 후처리 규칙집
+- 품목별 분석 마스터 스키마
 - 플레이북 예시
 - Dry-run CLI
 - API 키 로더
@@ -51,6 +54,7 @@ python3 -m src.openclaw_sales_pipeline.cli run --date 2026-04-08 --dry-run
 python3 -m src.openclaw_sales_pipeline.cli run --date 2026-04-08 --channel 스마트스토어 --channel 쿠팡\ WING --dry-run
 python3 -m src.openclaw_sales_pipeline.cli validate
 python3 -m src.openclaw_sales_pipeline.cli build-knowledge
+python3 -m src.openclaw_sales_pipeline.cli export-standards
 python3 -m src.openclaw_sales_pipeline.cli analyze-file --file /path/to/download.xlsx
 python3 -m src.openclaw_sales_pipeline.cli ingest-downloads --date 2026-04-09
 python3 -m src.openclaw_sales_pipeline.cli smtp-check
@@ -77,6 +81,14 @@ python3 -m src.openclaw_sales_pipeline.cli report-bundle --input-root run_output
 - `ingest-downloads`: Downloads를 재귀 스캔해서 채널별 폴더로 복사 또는 이동하고, 분석 JSON까지 바로 만든다.
 - `report-bundle`: 다운로드 파일과 분석 JSON을 모아 통합 엑셀 리포트, 요약 문서, 메일 초안을 만든다.
 - `smtp-check`: SMTP 설정이 실제 발송 가능한 상태인지 점검한다.
+- `export-standards`: 채널 출력 계약, 엑셀 후처리 규칙집, 품목 분석 마스터 스키마 JSON을 내보낸다.
+
+## 분석 표준
+- `channel_output_contract`: 다운로드 파일을 분석한 채널 결과 JSON의 공통 top-level 구조다.
+- `excel_postprocess_ruleset`: 빈 행 제거, 합계/총계 행 제거, 상태 포함/제외, 품목명 정규화 규칙의 기본값이다.
+- `product_analysis_master_schema`: `normalized_product_name`, `qty`, `sales`, `business_date` 등을 포함한 품목별 분석 공통 필드다.
+- 리포트 집계는 원본 `product_name` 대신 `normalized_product_name`을 우선 사용한다.
+- 채널별 플레이북은 `postprocess_rules`로 추가 규칙을 덧씌울 수 있다.
 
 ## 비밀키 설정
 예시 파일은 [`/Users/joinerhs/Documents/New project/config/secrets.example.json`](/Users/joinerhs/Documents/New%20project/config/secrets.example.json)에 있다.
@@ -148,9 +160,13 @@ python3 -m playwright install chromium
 - Workflow knowledge:
   - OpenClaw 채널 마스터 + 영상 지원 + 플레이북 커버리지를 하나의 JSON으로 생성
 - File analysis:
-  - 다운로드한 CSV/XLSX를 읽고 품목별 판매량/매출 요약 생성
+  - 다운로드한 CSV/XLSX를 읽고 채널별 표준 출력 포맷으로 변환
+  - 품목별 판매량/매출 요약 생성
+  - `normalized_product_name` 기준 품목 집계
+  - 채널별 `postprocess_rules` 적용
 - Reporting:
   - 다운로드 파일/분석 JSON을 모아 통합 레코드 생성
+  - `Standards` 시트에 적용한 출력 계약과 스키마 ID 기록
   - 일별 채널 매출, 월별 채널 매출, 품목별 매출, 품목별 판매량, 채널별 품목 매출 엑셀 시트 생성
   - 요약 Markdown과 `.eml` 메일 초안 생성
   - SMTP 설정이 있으면 실제 메일 발송 가능

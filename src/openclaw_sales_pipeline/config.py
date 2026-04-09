@@ -67,6 +67,7 @@ def load_playbooks(directory: Path) -> dict[str, Playbook]:
             browser_actions=list(raw.get("browser_actions", [])),
             metadata=dict(raw.get("metadata", {})),
             analysis_profile=dict(raw.get("analysis_profile", {})),
+            postprocess_rules=dict(raw.get("postprocess_rules", {})),
         )
         playbooks[playbook.vendor_name] = playbook
     return playbooks

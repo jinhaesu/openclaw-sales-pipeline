@@ -7,6 +7,10 @@
     "qty_header_candidates": ["수량", "주문수량", "판매수량"],
     "sales_header_candidates": ["상품구매금액", "판매금액", "매출액"]
   },
+  "postprocess_rules": {
+    "exclude_status_keywords": ["취소", "반품", "환불"],
+    "drop_footer_keywords": ["합계", "총계", "소계", "배송비"]
+  },
   "notes": [
     "취소/반품 행 제거 후 상품구매금액 기준 품목별 분석"
   ]
