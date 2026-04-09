@@ -1,0 +1,50 @@
+{
+  "vendor_name": "파트너스몰(카페24)",
+  "strategy": "browser_download",
+  "browser_actions": [
+    {
+      "type": "goto"
+    },
+    {
+      "type": "click_text",
+      "text": "대표운영자",
+      "fallback_texts": ["공급사"]
+    },
+    {
+      "type": "fill_selector",
+      "selector": "#mall_id",
+      "source": "id",
+      "fallback_selectors": ["input[name='loginId']"]
+    },
+    {
+      "type": "fill_selector",
+      "selector": "#userpasswd",
+      "source": "pw",
+      "fallback_selectors": ["input[name='loginPasswd']"]
+    },
+    {
+      "type": "click_selector",
+      "selector": "button.btnStrong.large",
+      "fallback_selectors": ["button[onclick*='form_check']"]
+    },
+    {
+      "type": "wait_for_timeout",
+      "ms": 5000
+    },
+    {
+      "type": "screenshot",
+      "path": "after_login.png"
+    },
+    {
+      "type": "note",
+      "message": "파트너스몰은 카페24 로그인 후 통계 > 매출분석 > 일별매출 경로를 discovery로 추가 고정한다."
+    }
+  ],
+  "notes": [
+    "API 대신 브라우저 로그인 우선",
+    "대표운영자 탭 기준 로그인 시도"
+  ],
+  "metadata": {
+    "reuse_session_state": true
+  }
+}

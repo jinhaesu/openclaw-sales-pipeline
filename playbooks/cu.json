@@ -43,8 +43,8 @@
       "path": "after_login.png"
     },
     {
-      "type": "click_text",
-      "text": "센터공급"
+      "type": "eval",
+      "expression": "() => { const nodes = Array.from(document.querySelectorAll('a, span, div')); const target = nodes.find((el) => (el.textContent || '').replace(/\\s+/g, ' ').trim() === '센터공급'); if (!target) throw new Error('센터공급 not found'); target.click(); }"
     },
     {
       "type": "wait_for_timeout",
@@ -55,8 +55,8 @@
       "path": "center_supply.png"
     },
     {
-      "type": "click_text",
-      "text": "납입 내역 집계"
+      "type": "eval",
+      "expression": "() => { const nodes = Array.from(document.querySelectorAll('a, span, div')); const target = nodes.find((el) => (el.textContent || '').replace(/\\s+/g, ' ').includes('납입 내역 집계')); if (!target) throw new Error('납입 내역 집계 not found'); target.click(); }"
     },
     {
       "type": "wait_for_timeout",
@@ -76,6 +76,6 @@
     "post-login 메뉴는 discovery 결과 기준으로 후속 고정"
   ],
   "metadata": {
-    "reuse_session_state": false
+    "reuse_session_state": true
   }
 }

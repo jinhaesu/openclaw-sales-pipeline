@@ -32,6 +32,8 @@ def summarize_runs(
         "counts_by_category": dict(Counter(item["category"] for item in items)),
         "counts_by_status": dict(Counter(item["status"] for item in items)),
         "auth_queue": [item for item in items if item["category"] == "auth_required"],
+        "login_queue": [item for item in items if item["category"] == "login_required"],
+        "captcha_queue": [item for item in items if item["category"] == "captcha_required"],
         "relogin_queue": [item for item in items if item["category"] == "session_expired"],
         "selector_fix_queue": [item for item in items if item["category"] == "selector_fix_needed"],
         "environment_queue": [item for item in items if item["category"] == "environment_blocked"],
@@ -134,6 +136,8 @@ def infer_next_action(category: str) -> str:
         "collected": "analyze_and_merge",
         "session_ready": "reuse_session_for_download",
         "auth_required": "request_verification_and_resume",
+        "login_required": "recheck_credentials_and_login_flow",
+        "captcha_required": "solve_captcha_or_switch_browser",
         "session_expired": "relogin_and_rerun_immediately",
         "selector_fix_needed": "run_discovery_and_adjust_playbook",
         "environment_blocked": "use_required_browser_environment",
@@ -150,7 +154,7 @@ def infer_status(category: str, has_download: bool, has_api_results: bool) -> st
         return "executed"
     if category == "not_started":
         return "pending"
-    if category in {"auth_required", "session_expired", "selector_fix_needed", "environment_blocked", "credentials_missing", "api_auth_failed"}:
+    if category in {"auth_required", "login_required", "captcha_required", "session_expired", "selector_fix_needed", "environment_blocked", "credentials_missing", "api_auth_failed"}:
         return "blocked"
     return "failed"
 
@@ -172,6 +176,12 @@ def build_summary_markdown(summary: dict[str, Any]) -> str:
         "## Auth Queue",
     ]
     for item in summary["auth_queue"]:
+        lines.append(f"- {item['business_date']} {item['vendor_name']}: {item['next_action']}")
+    lines.extend(["", "## Login Queue"])
+    for item in summary["login_queue"]:
+        lines.append(f"- {item['business_date']} {item['vendor_name']}: {item['detail']}")
+    lines.extend(["", "## Captcha Queue"])
+    for item in summary["captcha_queue"]:
         lines.append(f"- {item['business_date']} {item['vendor_name']}: {item['next_action']}")
     lines.extend(["", "## Relogin Queue"])
     for item in summary["relogin_queue"]:

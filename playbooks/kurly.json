@@ -1,6 +1,41 @@
 {
   "vendor_name": "컬리",
   "strategy": "browser_download",
+  "browser_actions": [
+    {
+      "type": "goto"
+    },
+    {
+      "type": "fill_selector",
+      "selector": "#inputEmail",
+      "source": "id"
+    },
+    {
+      "type": "fill_selector",
+      "selector": "#inputPassword",
+      "source": "pw"
+    },
+    {
+      "type": "click_selector",
+      "selector": "button[type='submit']",
+      "fallback_selectors": [
+        "button.btn-primary",
+        ".login-form button[type='submit']"
+      ]
+    },
+    {
+      "type": "wait_for_timeout",
+      "ms": 6000
+    },
+    {
+      "type": "screenshot",
+      "path": "after_login.png"
+    },
+    {
+      "type": "note",
+      "message": "컬리는 로그인 후 발주관리 > 발주일 설정 > 검색 > 발주내역 다운로드 흐름을 discovery로 추가 고정한다."
+    }
+  ],
   "analysis_profile": {
     "mode": "download_then_analyze",
     "product_header_candidates": ["상품명", "품목명", "상품"],
@@ -12,6 +47,10 @@
     "exclude_product_keywords": ["배송비"]
   },
   "notes": [
+    "컬리 로그인 selector 적용",
     "발주내역 다운로드 후 품목별 판매량/매출 요약"
-  ]
+  ],
+  "metadata": {
+    "reuse_session_state": true
+  }
 }

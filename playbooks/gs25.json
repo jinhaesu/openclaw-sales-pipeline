@@ -43,7 +43,9 @@
     {
       "type": "click_text_in_frame",
       "frame_url_contains": "MainFrame.jsp",
-      "text": "납품정보"
+      "text": "기간별",
+      "fallback_texts": ["납품정보"],
+      "search_all_frames": true
     },
     {
       "type": "wait_for_timeout",

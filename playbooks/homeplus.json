@@ -1,0 +1,49 @@
+{
+  "vendor_name": "홈플러스",
+  "strategy": "browser_download",
+  "browser_actions": [
+    {
+      "type": "goto"
+    },
+    {
+      "type": "wait_for_timeout",
+      "ms": 1500
+    },
+    {
+      "type": "fill_selector",
+      "selector": "#loginId",
+      "source": "id",
+      "fallback_selectors": ["input[name='loginId']"]
+    },
+    {
+      "type": "fill_selector",
+      "selector": "#loginPw",
+      "source": "pw",
+      "fallback_selectors": ["input[name='loginPw']"]
+    },
+    {
+      "type": "click_selector",
+      "selector": "#btn_login",
+      "fallback_selectors": ["button#btn_login"]
+    },
+    {
+      "type": "wait_for_timeout",
+      "ms": 4000
+    },
+    {
+      "type": "screenshot",
+      "path": "after_login.png"
+    },
+    {
+      "type": "note",
+      "message": "홈플러스는 로그인 후 부가정보 > 납품정보 > 일일정보 > 일자별정보 흐름을 discovery로 추가 고정한다."
+    }
+  ],
+  "notes": [
+    "로그인 화면 실제 selector 적용",
+    "로그인 후 다운로드 경로는 후속 discovery로 고정"
+  ],
+  "metadata": {
+    "reuse_session_state": true
+  }
+}

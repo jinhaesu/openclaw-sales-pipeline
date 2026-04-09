@@ -36,7 +36,13 @@ class BrowserCollector(BaseCollector):
               texts: Array.from(document.querySelectorAll('td, span, li, strong, b'))
                 .map((el, i) => ({i, text: (el.textContent || '').trim()}))
                 .filter(x => x.text && x.text.length < 60)
-                .slice(0, 250)
+                .slice(0, 250),
+              flags: {
+                has_recaptcha: !!document.querySelector('iframe[title*="reCAPTCHA"], .g-recaptcha, textarea[name="g-recaptcha-response"]'),
+                has_password_input: !!document.querySelector('input[type="password"]'),
+                has_login_button: Array.from(document.querySelectorAll('button, a, input[type="button"], input[type="submit"]'))
+                  .some((el) => /로그인|login/i.test((el.textContent || el.value || el.getAttribute('title') || '').trim()))
+              }
             })"""
         )
         (output_dir / file_name).write_text(
@@ -252,6 +258,40 @@ class BrowserCollector(BaseCollector):
             return "selector_fix_needed", "run_discovery_and_adjust_playbook"
         return "browser_failed", "inspect_browser_diagnostics"
 
+    def classify_post_action_page_state(self, job: Job, summary: dict[str, Any]) -> tuple[str, str, str] | None:
+        flags = summary.get("flags", {}) or {}
+        texts = " ".join(item.get("text", "") for item in summary.get("texts", []))
+        inputs = " ".join(
+            " ".join(
+                [
+                    str(item.get("id", "")),
+                    str(item.get("name", "")),
+                    str(item.get("placeholder", "")),
+                    str(item.get("value", "")),
+                ]
+            )
+            for item in summary.get("inputs", [])
+        )
+        blob = f"{summary.get('url', '')} {summary.get('title', '')} {texts} {inputs}".lower()
+        if flags.get("has_recaptcha"):
+            return "captcha_required", "solve_captcha_or_switch_browser", "captcha is present on login page"
+        login_markers = (
+            "login",
+            "로그인",
+            "partner portal",
+            "partner login",
+            "쇼핑몰관리자 로그인",
+            "서비스 로그인",
+        )
+        is_login_page = bool(flags.get("has_password_input") and flags.get("has_login_button")) and any(
+            marker in blob for marker in login_markers
+        )
+        if is_login_page:
+            if job.requires_verification or job.auth_type_meaning in {"sms_verification_required", "email_verification_required"}:
+                return "auth_required", "request_verification_and_resume", "authentication step is still required"
+            return "login_required", "recheck_credentials_and_login_flow", "page is still on login form after browser actions"
+        return None
+
     def detect_data_artifacts(self, output_dir: Path) -> bool:
         allowed = {".xlsx", ".xlsm", ".csv"}
         for path in output_dir.rglob("*"):
@@ -337,7 +377,7 @@ class BrowserCollector(BaseCollector):
                             page.goto(job.login_url, wait_until="domcontentloaded", timeout=30000)
                             executed_actions = [{"type": "goto", "url": job.login_url}]
                         (output_dir / "last_url.txt").write_text(page.url + "\n", encoding="utf-8")
-                        self.dump_page_summary(page, output_dir)
+                        summary = self.dump_page_summary(page, output_dir)
                         (output_dir / "browser_actions_executed.json").write_text(
                             json.dumps(executed_actions, ensure_ascii=False, indent=2) + "\n",
                             encoding="utf-8",
@@ -347,10 +387,20 @@ class BrowserCollector(BaseCollector):
                         context.close()
                         browser.close()
                     data_ready = self.detect_data_artifacts(output_dir)
-                    status = "executed" if data_ready else "scaffolded"
-                    detail = "browser collector executed" if data_ready else "playwright session initialized"
-                    category = "collected" if data_ready else "session_ready"
-                    next_action = "analyze_and_merge" if data_ready else "reuse_session_for_download"
+                    page_state = self.classify_post_action_page_state(job, summary) if not data_ready else None
+                    if data_ready:
+                        status = "executed"
+                        detail = "browser collector executed"
+                        category = "collected"
+                        next_action = "analyze_and_merge"
+                    elif page_state:
+                        category, next_action, detail = page_state
+                        status = "blocked" if category in {"auth_required", "captcha_required"} else "failed"
+                    else:
+                        status = "scaffolded"
+                        detail = "playwright session initialized"
+                        category = "session_ready"
+                        next_action = "reuse_session_for_download"
                 except Exception as exc:
                     try:
                         current_action = None
