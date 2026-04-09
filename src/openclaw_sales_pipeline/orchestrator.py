@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import asdict
 from pathlib import Path
 
 from .channel_credentials import ChannelCredentialStore
@@ -136,6 +137,7 @@ def _run_job(
         "run_mode": job.run_mode,
         "business_date": job.business_date,
         "auth_type_meaning": job.auth_type_meaning,
+        "requires_verification": job.requires_verification,
         "collection_path": job.collection_path,
         "notes": job.notes,
     }
@@ -146,4 +148,9 @@ def _run_job(
 
     time.sleep(0.02)
     collector = get_collector(job, cfg, secrets, channel_credentials)
-    return collector.collect(job, dry_run=dry_run)
+    result = collector.collect(job, dry_run=dry_run)
+    (output_dir / "result.json").write_text(
+        json.dumps(asdict(result), ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return result

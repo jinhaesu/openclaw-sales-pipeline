@@ -73,6 +73,9 @@ class JobResult:
     status: str
     output_dir: str
     detail: str
+    category: str = ""
+    next_action: str = ""
+    data_ready: bool = False
     metadata: dict[str, Any] = field(default_factory=dict)
 
 

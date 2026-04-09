@@ -12,6 +12,7 @@ from .excel_analysis import analyze_sales_file, write_analysis
 from .ingest import ingest_downloads
 from .orchestrator import build_jobs, execute_jobs, summarize_jobs
 from .reporting import build_report_bundle, validate_smtp_profile
+from .run_summary import summarize_runs
 from .secrets import SecretStore
 from .standards import build_standards_bundle
 from .workflow_knowledge import build_workflow_knowledge, write_workflow_knowledge
@@ -87,6 +88,13 @@ def parse_args() -> argparse.Namespace:
 
     smtp_parser = subparsers.add_parser("smtp-check", help="Validate SMTP profile and optionally print readiness")
     smtp_parser.add_argument("--smtp-profile", default="smtp", help="Secret profile name for SMTP settings")
+
+    summary_parser = subparsers.add_parser("summarize-runs", help="Summarize collection runs into auth/relogin/fix queues")
+    summary_parser.add_argument("--input-root", default="run_outputs", help="Root directory to scan for run outputs")
+    summary_parser.add_argument("--date-from", default="", help="Start business date (YYYY-MM-DD)")
+    summary_parser.add_argument("--date-to", default="", help="End business date (YYYY-MM-DD)")
+    summary_parser.add_argument("--channel", action="append", default=[], help="Only include matching vendor names")
+    summary_parser.add_argument("--output-dir", default="artifacts/run_status/latest", help="Output directory for summary JSON/Markdown")
 
     discover_parser = subparsers.add_parser("discover-browser", help="Discover browser menu/frame structure after playbook actions")
     discover_parser.add_argument("--date", required=True, help="Business date (YYYY-MM-DD)")
@@ -164,6 +172,17 @@ def main() -> None:
         secrets = SecretStore(Path(cfg.secrets_path).expanduser())
         status = validate_smtp_profile(secrets, args.smtp_profile)
         print(json.dumps(status, ensure_ascii=False, indent=2))
+        return
+
+    if args.command == "summarize-runs":
+        summary = summarize_runs(
+            input_root=Path(args.input_root).expanduser(),
+            date_from=args.date_from or None,
+            date_to=args.date_to or None,
+            channel_filters=list(args.channel),
+            output_dir=Path(args.output_dir).expanduser(),
+        )
+        print(json.dumps(summary, ensure_ascii=False, indent=2))
         return
 
     if args.command == "report-bundle":

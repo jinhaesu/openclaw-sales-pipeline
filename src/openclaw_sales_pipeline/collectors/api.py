@@ -67,14 +67,23 @@ class ApiCollector(BaseCollector):
         if dry_run:
             detail = "api collector planned"
             status = "planned"
+            category = "planned"
+            next_action = "run_without_dry_run"
+            data_ready = False
         elif not has_credentials:
             detail = "missing api credentials"
             status = "missing_credentials"
+            category = "credentials_missing"
+            next_action = "add_api_credentials_or_switch_browser"
+            data_ready = False
         else:
             client = build_api_client(playbook.api_provider if playbook else None, self.secrets.get(credential_key))
             if client is None:
                 detail = "no api client registered"
                 status = "unsupported_provider"
+                category = "unsupported"
+                next_action = "implement_provider_or_use_browser"
+                data_ready = False
             else:
                 dataset_results = {}
                 try:
@@ -90,6 +99,9 @@ class ApiCollector(BaseCollector):
                     )
                     detail = "api collector executed"
                     status = "executed"
+                    category = "collected"
+                    next_action = "analyze_and_merge"
+                    data_ready = True
                 except Exception as exc:
                     error_payload = {"error": type(exc).__name__, "message": str(exc)}
                     (Path(output_dir) / "api_error.json").write_text(
@@ -98,6 +110,8 @@ class ApiCollector(BaseCollector):
                     )
                     detail = f"api collector failed: {type(exc).__name__}"
                     status = "failed"
+                    category, next_action = classify_api_failure(str(exc))
+                    data_ready = False
 
         return JobResult(
             vendor_name=job.vendor_name,
@@ -105,6 +119,9 @@ class ApiCollector(BaseCollector):
             status=status,
             output_dir=str(output_dir),
             detail=detail,
+            category=category,
+            next_action=next_action,
+            data_ready=data_ready,
             metadata={
                 "run_mode": job.run_mode,
                 "provider": playbook.api_provider if playbook else None,
@@ -132,3 +149,12 @@ class ElevenstApiCollector(ApiCollector):
 
 class EsmApiCollector(ApiCollector):
     pass
+
+
+def classify_api_failure(message: str) -> tuple[str, str]:
+    lowered = message.lower()
+    if "401" in lowered or "403" in lowered or "auth" in lowered or "token" in lowered:
+        return "api_auth_failed", "refresh_api_auth"
+    if "timeout" in lowered or "temporarily" in lowered or "unavailable" in lowered:
+        return "api_retry_needed", "retry_api_call"
+    return "api_failed", "inspect_api_error"

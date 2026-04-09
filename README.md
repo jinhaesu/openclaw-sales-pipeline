@@ -58,6 +58,7 @@ python3 -m src.openclaw_sales_pipeline.cli export-standards
 python3 -m src.openclaw_sales_pipeline.cli analyze-file --file /path/to/download.xlsx
 python3 -m src.openclaw_sales_pipeline.cli ingest-downloads --date 2026-04-09
 python3 -m src.openclaw_sales_pipeline.cli smtp-check
+python3 -m src.openclaw_sales_pipeline.cli summarize-runs --input-root run_outputs --date-from 2026-04-08 --date-to 2026-04-08
 python3 -m src.openclaw_sales_pipeline.cli discover-browser --date 2026-04-08 --channel GS25
 python3 -m src.openclaw_sales_pipeline.cli report-bundle --input-root run_outputs --date-from 2026-04-01 --date-to 2026-04-08 --output-dir artifacts/report_bundles/april_week2
 ```
@@ -81,6 +82,7 @@ python3 -m src.openclaw_sales_pipeline.cli report-bundle --input-root run_output
 - `ingest-downloads`: Downloads를 재귀 스캔해서 채널별 폴더로 복사 또는 이동하고, 분석 JSON까지 바로 만든다.
 - `report-bundle`: 다운로드 파일과 분석 JSON을 모아 통합 엑셀 리포트, 요약 문서, 메일 초안을 만든다.
 - `smtp-check`: SMTP 설정이 실제 발송 가능한 상태인지 점검한다.
+- `summarize-runs`: 실행 결과를 인증 대기, 재로그인, selector 수정, 환경 제약 큐로 요약한다.
 - `export-standards`: 채널 출력 계약, 엑셀 후처리 규칙집, 품목 분석 마스터 스키마 JSON을 내보낸다.
 
 ## 분석 표준
@@ -153,6 +155,9 @@ python3 -m playwright install chromium
 - Browser collector:
   - Playwright가 있으면 세션 state 저장
   - 플레이북 액션을 실행하고 결과를 저장
+  - 액션별 retry/fallback을 적용
+  - 실패 시 현재 URL, 스크린샷, page summary를 저장
+  - 결과를 `result.json`으로 남겨 다음 라운드에서 상태 레저가 재사용 가능
 - Browser discovery:
   - 로그인 이후 페이지/프레임/링크/텍스트 구조를 파일로 저장
   - 여러 채널 selector 기준을 빠르게 맞출 때 사용
@@ -172,6 +177,9 @@ python3 -m playwright install chromium
   - SMTP 설정이 있으면 실제 메일 발송 가능
 - Validation:
   - 플레이북/비밀키/브라우저 액션 커버리지를 한 번에 점검
+- Run status ledger:
+  - `result.json`, `browser_error.json`, `api_error.json`, 다운로드 파일 존재 여부를 종합해 채널 상태를 표준 분류
+  - 인증 대기 큐, 재로그인 큐, selector 수정 큐를 자동 생성
 
 ## 다음 확장 포인트
 - Playwright 기반 브라우저 수집기 추가
