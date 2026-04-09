@@ -9,8 +9,9 @@ from .browser_discovery import discover_channel
 from .channel_credentials import ChannelCredentialStore
 from .config import load_channel_master, load_playbooks, load_runtime_config
 from .excel_analysis import analyze_sales_file, write_analysis
+from .ingest import ingest_downloads
 from .orchestrator import build_jobs, execute_jobs, summarize_jobs
-from .reporting import build_report_bundle
+from .reporting import build_report_bundle, validate_smtp_profile
 from .secrets import SecretStore
 from .workflow_knowledge import build_workflow_knowledge, write_workflow_knowledge
 
@@ -52,6 +53,15 @@ def parse_args() -> argparse.Namespace:
         help="Output JSON path",
     )
 
+    ingest_parser = subparsers.add_parser("ingest-downloads", help="Scan Downloads, store matched sales files by channel, and analyze them")
+    ingest_parser.add_argument("--downloads-root", default="~/Downloads", help="Downloads root to scan recursively")
+    ingest_parser.add_argument("--date", required=True, help="Business date (YYYY-MM-DD)")
+    ingest_parser.add_argument("--channel", action="append", default=[], help="Only include matching vendor names")
+    ingest_parser.add_argument("--output-root", default="", help="Override artifact root for stored downloads")
+    ingest_parser.add_argument("--manifest-output", default="", help="Optional manifest JSON output path")
+    ingest_parser.add_argument("--move", action="store_true", help="Move files instead of copying them")
+    ingest_parser.add_argument("--skip-analysis", action="store_true", help="Store files without generating analysis JSON")
+
     report_parser = subparsers.add_parser("report-bundle", help="Build consolidated sales workbook, summary, and email draft")
     report_parser.add_argument("--input-root", default="run_outputs", help="Root directory to scan for downloaded files")
     report_parser.add_argument("--manifest", default="", help="Optional source manifest JSON path")
@@ -66,6 +76,9 @@ def parse_args() -> argparse.Namespace:
     report_parser.add_argument("--email-subject", default="", help="Optional subject override")
     report_parser.add_argument("--send-email", action="store_true", help="Send email using SMTP profile from secrets file")
     report_parser.add_argument("--smtp-profile", default="smtp", help="Secret profile name for SMTP settings")
+
+    smtp_parser = subparsers.add_parser("smtp-check", help="Validate SMTP profile and optionally print readiness")
+    smtp_parser.add_argument("--smtp-profile", default="smtp", help="Secret profile name for SMTP settings")
 
     discover_parser = subparsers.add_parser("discover-browser", help="Discover browser menu/frame structure after playbook actions")
     discover_parser.add_argument("--date", required=True, help="Business date (YYYY-MM-DD)")
@@ -104,6 +117,29 @@ def main() -> None:
         output_path = Path(args.output).expanduser()
         write_analysis(output_path, analysis)
         print(json.dumps({"output": str(output_path.resolve()), "row_count": analysis["row_count"], "product_count": analysis["product_count"]}, ensure_ascii=False, indent=2))
+        return
+
+    if args.command == "ingest-downloads":
+        manifest_output = Path(args.manifest_output).expanduser() if args.manifest_output else None
+        output_root = Path(args.output_root).expanduser() if args.output_root else Path(cfg.artifact_root).expanduser()
+        manifest = ingest_downloads(
+            downloads_root=Path(args.downloads_root),
+            output_root=output_root,
+            channels=channels,
+            playbooks=playbooks,
+            business_date=args.date,
+            channel_filters=list(args.channel),
+            analyze=not bool(args.skip_analysis),
+            move_files=bool(args.move),
+            manifest_path=manifest_output,
+        )
+        print(json.dumps(manifest, ensure_ascii=False, indent=2))
+        return
+
+    if args.command == "smtp-check":
+        secrets = SecretStore(Path(cfg.secrets_path).expanduser())
+        status = validate_smtp_profile(secrets, args.smtp_profile)
+        print(json.dumps(status, ensure_ascii=False, indent=2))
         return
 
     if args.command == "report-bundle":

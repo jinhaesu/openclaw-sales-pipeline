@@ -90,9 +90,11 @@ def build_report_bundle(
         from_addr=secrets.get(smtp_profile).get("from_addr", ""),
     )
 
+    smtp_status = validate_smtp_profile(secrets, smtp_profile)
     sent = False
+    send_error = ""
     if send_email:
-        sent = send_email_bundle(
+        sent, send_error = send_email_bundle(
             secrets=secrets,
             smtp_profile=smtp_profile,
             subject=email_subject or f"[OpenClaw] 매출 리포트 {report_label}",
@@ -114,7 +116,9 @@ def build_report_bundle(
             "manifest": str(manifest_output_path.resolve()),
             "email_draft": str(draft_path.resolve()),
         },
+        "smtp_status": smtp_status,
         "sent_email": sent,
+        "send_error": send_error,
         "summary": report["summary"],
     }
 
@@ -176,26 +180,39 @@ def collect_report_sources(
                 vendor_name = vendor_lookup.get(vendor_dir.name, vendor_dir.name.replace("_", " "))
                 if channel_set and vendor_name not in channel_set:
                     continue
-                for file_path in sorted(vendor_dir.iterdir()):
+                analysis_by_stem: dict[str, Path] = {}
+                raw_files: list[Path] = []
+                for file_path in sorted(vendor_dir.rglob("*")):
+                    if not file_path.is_file():
+                        continue
                     suffix = file_path.suffix.lower()
-                    if suffix in SUPPORTED_SOURCE_SUFFIXES:
-                        sources.append(
-                            {
-                                "vendor_name": vendor_name,
-                                "business_date": business_date,
-                                "path": str(file_path.resolve()),
-                                "source_type": "raw_file",
-                            }
-                        )
-                    elif file_path.name.endswith("_analysis.json") or file_path.name == "file_analysis.json":
-                        sources.append(
-                            {
-                                "vendor_name": vendor_name,
-                                "business_date": business_date,
-                                "path": str(file_path.resolve()),
-                                "source_type": "analysis_json",
-                            }
-                        )
+                    if file_path.name.endswith("_analysis.json") or file_path.name == "file_analysis.json":
+                        stem = file_path.name.removesuffix("_analysis.json") if file_path.name.endswith("_analysis.json") else file_path.stem
+                        analysis_by_stem[stem] = file_path
+                    elif suffix in SUPPORTED_SOURCE_SUFFIXES:
+                        raw_files.append(file_path)
+
+                for file_path in sorted(analysis_by_stem.values()):
+                    sources.append(
+                        {
+                            "vendor_name": vendor_name,
+                            "business_date": business_date,
+                            "path": str(file_path.resolve()),
+                            "source_type": "analysis_json",
+                        }
+                    )
+
+                for file_path in sorted(raw_files):
+                    if file_path.stem in analysis_by_stem:
+                        continue
+                    sources.append(
+                        {
+                            "vendor_name": vendor_name,
+                            "business_date": business_date,
+                            "path": str(file_path.resolve()),
+                            "source_type": "raw_file",
+                        }
+                    )
 
     unique: dict[tuple[str, str, str], dict[str, Any]] = {}
     for item in sources:
@@ -533,13 +550,14 @@ def send_email_bundle(
     cc_addrs: list[str],
     summary_markdown: str,
     attachments: list[Path],
-) -> bool:
+) -> tuple[bool, str]:
     smtp_config = secrets.get(smtp_profile)
     required = ["host", "port", "username", "password", "from_addr"]
     if not all(smtp_config.get(key) for key in required):
-        return False
+        missing = [key for key in required if not smtp_config.get(key)]
+        return False, f"missing_smtp_fields:{','.join(missing)}"
     if not to_addrs and not cc_addrs:
-        return False
+        return False, "missing_recipients"
 
     message = EmailMessage()
     message["Subject"] = subject
@@ -564,7 +582,19 @@ def send_email_bundle(
             server.starttls()
         server.login(str(smtp_config["username"]), str(smtp_config["password"]))
         server.send_message(message)
-    return True
+    return True, ""
+
+
+def validate_smtp_profile(secrets: SecretStore, smtp_profile: str) -> dict[str, Any]:
+    smtp_config = secrets.get(smtp_profile)
+    required = ["host", "port", "username", "password", "from_addr"]
+    missing = [key for key in required if not smtp_config.get(key)]
+    return {
+        "profile": smtp_profile,
+        "configured": bool(smtp_config),
+        "ready": not missing,
+        "missing_fields": missing,
+    }
 
 
 def top_rows(rows: list[dict[str, Any]], key: str, label: str, limit: int) -> list[dict[str, Any]]:
