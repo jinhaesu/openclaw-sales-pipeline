@@ -91,11 +91,11 @@ def parse_args() -> argparse.Namespace:
     report_parser.add_argument("--email-to", action="append", default=[], help="Recipient email address")
     report_parser.add_argument("--email-cc", action="append", default=[], help="CC email address")
     report_parser.add_argument("--email-subject", default="", help="Optional subject override")
-    report_parser.add_argument("--send-email", action="store_true", help="Send email using SMTP profile from secrets file")
-    report_parser.add_argument("--smtp-profile", default="smtp", help="Secret profile name for SMTP settings")
+    report_parser.add_argument("--send-email", action="store_true", help="Send email using the configured email profile from secrets file")
+    report_parser.add_argument("--smtp-profile", default="email", help="Secret profile name for email delivery settings")
 
-    smtp_parser = subparsers.add_parser("smtp-check", help="Validate SMTP profile and optionally print readiness")
-    smtp_parser.add_argument("--smtp-profile", default="smtp", help="Secret profile name for SMTP settings")
+    smtp_parser = subparsers.add_parser("smtp-check", help="Validate the configured email delivery profile and print readiness")
+    smtp_parser.add_argument("--smtp-profile", default="email", help="Secret profile name for email delivery settings")
 
     summary_parser = subparsers.add_parser("summarize-runs", help="Summarize collection runs into auth/relogin/fix queues")
     summary_parser.add_argument("--input-root", default="run_outputs", help="Root directory to scan for run outputs")

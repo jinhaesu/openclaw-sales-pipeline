@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import mimetypes
 import smtplib
@@ -9,6 +10,8 @@ from datetime import datetime
 from email.message import EmailMessage
 from pathlib import Path
 from typing import Any
+from urllib import error as urlerror
+from urllib import request as urlrequest
 
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
@@ -89,6 +92,8 @@ def build_report_bundle(
     summary_json_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     manifest_output_path.write_text(json.dumps({"sources": sources}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
+    email_profile_name, email_config = resolve_email_profile(secrets, smtp_profile)
+
     draft_path = create_email_draft(
         output_dir=output_dir,
         subject=email_subject or f"[OpenClaw] 매출 리포트 {report_label}",
@@ -96,7 +101,7 @@ def build_report_bundle(
         cc_addrs=email_cc or [],
         summary_markdown=summary_markdown,
         attachments=[workbook_path, summary_path],
-        from_addr=secrets.get(smtp_profile).get("from_addr", ""),
+        from_addr=email_config.get("from_addr", ""),
     )
 
     smtp_status = validate_smtp_profile(secrets, smtp_profile)
@@ -131,6 +136,8 @@ def build_report_bundle(
             "product_analysis_master_schema_id": PRODUCT_ANALYSIS_MASTER_SCHEMA_ID,
         },
         "smtp_status": smtp_status,
+        "email_profile": email_profile_name,
+        "email_provider": smtp_status.get("provider", ""),
         "sent_email": sent,
         "send_error": send_error,
         "summary": report["summary"],
@@ -850,13 +857,23 @@ def send_email_bundle(
     summary_markdown: str,
     attachments: list[Path],
 ) -> tuple[bool, str]:
-    smtp_config = secrets.get(smtp_profile)
-    required = ["host", "port", "username", "password", "from_addr"]
-    if not all(smtp_config.get(key) for key in required):
-        missing = [key for key in required if not smtp_config.get(key)]
-        return False, f"missing_smtp_fields:{','.join(missing)}"
+    profile_name, smtp_config = resolve_email_profile(secrets, smtp_profile)
+    provider = resolve_email_provider(smtp_config)
+    validation = validate_smtp_profile(secrets, smtp_profile)
+    if not validation.get("ready", False):
+        return False, f"missing_{provider}_fields:{','.join(validation.get('missing_fields', []))}"
     if not to_addrs and not cc_addrs:
         return False, "missing_recipients"
+
+    if provider == "resend":
+        return send_resend_email(
+            config=smtp_config,
+            subject=subject,
+            to_addrs=to_addrs,
+            cc_addrs=cc_addrs,
+            summary_markdown=summary_markdown,
+            attachments=attachments,
+        )
 
     message = EmailMessage()
     message["Subject"] = subject
@@ -885,15 +902,94 @@ def send_email_bundle(
 
 
 def validate_smtp_profile(secrets: SecretStore, smtp_profile: str) -> dict[str, Any]:
-    smtp_config = secrets.get(smtp_profile)
-    required = ["host", "port", "username", "password", "from_addr"]
+    profile_name, smtp_config = resolve_email_profile(secrets, smtp_profile)
+    provider = resolve_email_provider(smtp_config)
+    if provider == "resend":
+        required = ["api_key", "from_addr"]
+    else:
+        required = ["host", "port", "username", "password", "from_addr"]
     missing = [key for key in required if not smtp_config.get(key)]
     return {
-        "profile": smtp_profile,
+        "profile": profile_name,
+        "provider": provider,
         "configured": bool(smtp_config),
         "ready": not missing,
         "missing_fields": missing,
     }
+
+
+def resolve_email_profile(secrets: SecretStore, preferred_profile: str) -> tuple[str, dict[str, Any]]:
+    candidates = [preferred_profile]
+    for fallback in ("email", "resend", "smtp"):
+        if fallback not in candidates:
+            candidates.append(fallback)
+    for candidate in candidates:
+        config = secrets.get(candidate)
+        if config:
+            return candidate, config
+    return preferred_profile, {}
+
+
+def resolve_email_provider(config: dict[str, Any]) -> str:
+    provider = str(config.get("provider", "") or "").strip().lower()
+    if provider:
+        return provider
+    if config.get("api_key"):
+        return "resend"
+    return "smtp"
+
+
+def send_resend_email(
+    config: dict[str, Any],
+    subject: str,
+    to_addrs: list[str],
+    cc_addrs: list[str],
+    summary_markdown: str,
+    attachments: list[Path],
+) -> tuple[bool, str]:
+    payload: dict[str, Any] = {
+        "from": str(config["from_addr"]),
+        "to": to_addrs,
+        "subject": subject,
+        "text": summary_markdown,
+    }
+    if cc_addrs:
+        payload["cc"] = cc_addrs
+    reply_to = config.get("reply_to")
+    if reply_to:
+        payload["replyTo"] = reply_to
+    if attachments:
+        payload["attachments"] = [
+            {
+                "filename": attachment.name,
+                "content": base64.b64encode(attachment.read_bytes()).decode("ascii"),
+            }
+            for attachment in attachments
+        ]
+
+    base_url = str(config.get("base_url", "https://api.resend.com")).rstrip("/")
+    request = urlrequest.Request(
+        url=f"{base_url}/emails",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {config['api_key']}",
+            "Content-Type": "application/json",
+            "User-Agent": "openclaw-sales-pipeline/1.0",
+        },
+        method="POST",
+    )
+    try:
+        with urlrequest.urlopen(request, timeout=30) as response:
+            response_body = response.read().decode("utf-8")
+        parsed = json.loads(response_body or "{}")
+        if parsed.get("id"):
+            return True, ""
+        return False, f"resend_unexpected_response:{response_body[:240]}"
+    except urlerror.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")
+        return False, f"resend_http_error:{exc.code}:{body[:240]}"
+    except Exception as exc:
+        return False, f"resend_request_failed:{type(exc).__name__}:{str(exc)[:240]}"
 
 
 def top_rows(rows: list[dict[str, Any]], key: str, label: str, limit: int) -> list[dict[str, Any]]:

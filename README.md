@@ -83,7 +83,7 @@ python3 -m src.openclaw_sales_pipeline.cli report-bundle --input-root run_output
 - `discover-browser`: 플레이북 액션을 실행한 뒤 현재 페이지, 프레임, 링크, 텍스트 구조를 덤프해서 selector 기준을 빠르게 맞춘다.
 - `ingest-downloads`: Downloads를 재귀 스캔해서 채널별 폴더로 복사 또는 이동하고, 분석 JSON까지 바로 만든다.
 - `report-bundle`: 다운로드 파일과 분석 JSON을 모아 통합 엑셀 리포트, 요약 문서, 메일 초안을 만든다.
-- `smtp-check`: SMTP 설정이 실제 발송 가능한 상태인지 점검한다.
+- `smtp-check`: 이메일 발송 프로필이 실제 발송 가능한 상태인지 점검한다. 현재는 SMTP와 Resend를 모두 지원한다.
 - `summarize-runs`: 실행 결과를 인증 대기, 재로그인, selector 수정, 환경 제약 큐로 요약하고 `오늘 바로 돌릴 채널 / 인증 대기 / 레거시 집중채널` 추천을 만든다.
 - `export-standards`: 채널 출력 계약, 엑셀 후처리 규칙집, 품목 분석 마스터 스키마, 채널 운영 모델 JSON을 내보낸다.
 - `export-operations`: 채널 운영 큐, 인증 우선순위, 레거시 우회 경로, 채널별 확정 기준 번들을 내보낸다.
@@ -118,6 +118,13 @@ python3 -m src.openclaw_sales_pipeline.cli report-bundle --input-root run_output
     "access_key": "your-access-key",
     "secret_key": "your-secret-key",
     "vendor_id": "A00000000"
+  },
+  "email": {
+    "provider": "resend",
+    "api_key": "re_xxxxxxxxx",
+    "from_addr": "담이사 리포트 <reports@example.com>",
+    "reply_to": ["ops@example.com"],
+    "base_url": "https://api.resend.com"
   },
   "smtp": {
     "host": "smtp.example.com",
@@ -182,7 +189,8 @@ python3 -m playwright install chromium
   - 일별 채널 매출, 월별 채널 매출, 품목별 매출, 품목별 판매량, 채널별 품목 매출, 채널 정의 시트 생성
   - 요약 Markdown과 `.eml` 메일 초안 생성
   - 요약 문서에 채널별 매출 기준, 기준일, 수집방식을 먼저 적는다
-- SMTP 설정이 있으면 실제 메일 발송 가능
+  - 이메일 프로필이 있으면 실제 메일 발송 가능
+  - Resend 사용 시 `provider=resend`, `api_key`, `from_addr`를 넣으면 된다
 - Validation:
   - 플레이북/비밀키/브라우저 액션 커버리지를 한 번에 점검
 - Run status ledger:

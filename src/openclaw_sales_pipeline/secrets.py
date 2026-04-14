@@ -13,6 +13,7 @@ class SecretStore:
         "elevenst": ["api_key"],
         "esm": ["api_key", "seller_id"],
         "smtp": ["host", "port", "username", "password", "from_addr"],
+        "resend": ["api_key", "from_addr"],
     }
 
     def __init__(self, path: Path) -> None:
@@ -30,6 +31,11 @@ class SecretStore:
         value = self._data[key]
         if isinstance(value, dict):
             required = self.REQUIRED_FIELDS.get(key, [])
+            provider = str(value.get("provider", "") or "").strip().lower()
+            if provider == "resend":
+                required = ["api_key", "from_addr"]
+            elif provider == "smtp":
+                required = ["host", "port", "username", "password", "from_addr"]
             if required:
                 return all(value.get(field) not in ("", None, [], {}) for field in required)
             return any(v not in ("", None, [], {}) for v in value.values())
