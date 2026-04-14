@@ -4,6 +4,7 @@ import json
 import mimetypes
 import smtplib
 from collections import defaultdict
+from dataclasses import asdict
 from datetime import datetime
 from email.message import EmailMessage
 from pathlib import Path
@@ -14,6 +15,7 @@ from openpyxl.styles import Font, PatternFill
 
 from .excel_analysis import analyze_sales_file
 from .models import ChannelRecord, Playbook
+from .operations import build_channel_operation_profile
 from .secrets import SecretStore
 from .standards import (
     CHANNEL_OUTPUT_CONTRACT_ID,
@@ -258,11 +260,22 @@ def analyze_sources(
         vendor_name = source.get("vendor_name", "")
         channel = channel_lookup.get(vendor_name)
         playbook = playbooks.get(vendor_name)
+        operation_profile = build_channel_operation_profile(asdict(channel), asdict(playbook) if playbook else {}) if channel else {}
         context = {
             "vendor_name": vendor_name,
             "business_date": source.get("business_date", ""),
             "channel_group": channel.channel_group if channel else "",
             "manager": channel.manager if channel else "",
+            "queue_id": operation_profile.get("queue_id", ""),
+            "queue_label": operation_profile.get("queue_label", ""),
+            "collection_mode": operation_profile.get("collection_mode", ""),
+            "browser_policy": operation_profile.get("browser_policy", ""),
+            "session_strategy": operation_profile.get("session_strategy", ""),
+            "revenue_basis": operation_profile.get("revenue_basis", ""),
+            "revenue_metric_key": operation_profile.get("revenue_metric_key", ""),
+            "date_basis": operation_profile.get("date_basis", ""),
+            "validation_mode": operation_profile.get("validation_mode", ""),
+            "verification_mode": operation_profile.get("verification_mode", ""),
         }
         if source.get("source_type") == "analysis_json":
             raw = json.loads(path.read_text(encoding="utf-8"))
@@ -277,6 +290,26 @@ def analyze_sources(
                     record["business_month"] = str(record["business_date"])[:7]
                 if not record.get("normalized_product_name"):
                     record["normalized_product_name"] = record.get("product_name", "(unknown)")
+                if not record.get("revenue_basis"):
+                    record["revenue_basis"] = context.get("revenue_basis", "")
+                if not record.get("date_basis"):
+                    record["date_basis"] = context.get("date_basis", "")
+                if not record.get("queue_id"):
+                    record["queue_id"] = context.get("queue_id", "")
+                if not record.get("queue_label"):
+                    record["queue_label"] = context.get("queue_label", "")
+                if not record.get("collection_mode"):
+                    record["collection_mode"] = context.get("collection_mode", "")
+                if not record.get("browser_policy"):
+                    record["browser_policy"] = context.get("browser_policy", "")
+                if not record.get("session_strategy"):
+                    record["session_strategy"] = context.get("session_strategy", "")
+                if not record.get("validation_mode"):
+                    record["validation_mode"] = context.get("validation_mode", "")
+                if not record.get("verification_mode"):
+                    record["verification_mode"] = context.get("verification_mode", "")
+                if not record.get("raw_file_name"):
+                    record["raw_file_name"] = path.name
                 records.append(record)
             if not records and raw.get("items"):
                 for item in raw["items"]:
@@ -290,14 +323,30 @@ def analyze_sources(
                             "status": "",
                             "product_name": item.get("product_name", "(unknown)"),
                             "normalized_product_name": item.get("normalized_product_name", item.get("product_name", "(unknown)")),
+                            "sku": item.get("sku", ""),
                             "qty": float(item.get("qty", 0) or 0),
                             "sales": float(item.get("sales", 0) or 0),
+                            "gross_sales": float(item.get("gross_sales", 0) or 0),
+                            "net_sales": float(item.get("net_sales", 0) or 0),
+                            "supply_amount": float(item.get("supply_amount", 0) or 0),
+                            "delivery_amount": float(item.get("delivery_amount", 0) or 0),
+                            "refund_flag": bool(item.get("refund_flag", False)),
+                            "revenue_basis": context.get("revenue_basis", ""),
+                            "date_basis": context.get("date_basis", ""),
+                            "queue_id": context.get("queue_id", ""),
+                            "queue_label": context.get("queue_label", ""),
+                            "collection_mode": context.get("collection_mode", ""),
+                            "browser_policy": context.get("browser_policy", ""),
+                            "session_strategy": context.get("session_strategy", ""),
+                            "validation_mode": context.get("validation_mode", ""),
+                            "verification_mode": context.get("verification_mode", ""),
                             "source_file": str(path),
+                            "raw_file_name": path.name,
                         }
                     )
             analysis = {
                 "output_type": raw.get("output_type", "channel_sales_analysis"),
-                "format_version": raw.get("format_version", "2026-04-09"),
+                "format_version": raw.get("format_version", "2026-04-14"),
                 "channel_output_contract_id": raw.get("channel_output_contract_id", CHANNEL_OUTPUT_CONTRACT_ID),
                 "product_analysis_master_schema_id": raw.get(
                     "product_analysis_master_schema_id",
@@ -314,11 +363,16 @@ def analyze_sources(
                 "vendor_name": vendor_name,
                 "business_date": source.get("business_date", ""),
                 "file": str(path),
+                "operation_profile": operation_profile,
                 "row_count": len(records),
                 "product_count": len({item.get("product_name", "") for item in records}),
                 "totals": {
                     "qty": round(sum(float(item.get("qty", 0) or 0) for item in records), 2),
                     "sales": round(sum(float(item.get("sales", 0) or 0) for item in records), 2),
+                    "gross_sales": round(sum(float(item.get("gross_sales", 0) or 0) for item in records), 2),
+                    "net_sales": round(sum(float(item.get("net_sales", 0) or 0) for item in records), 2),
+                    "supply_amount": round(sum(float(item.get("supply_amount", 0) or 0) for item in records), 2),
+                    "delivery_amount": round(sum(float(item.get("delivery_amount", 0) or 0) for item in records), 2),
                 },
                 "records": records,
             }
@@ -328,6 +382,7 @@ def analyze_sources(
                 profile=build_analysis_profile(playbook),
                 context=context,
             )
+            analysis["operation_profile"] = operation_profile
         analyses.append(analysis)
     return analyses
 
@@ -342,14 +397,26 @@ def build_analysis_profile(playbook: Playbook | None) -> dict[str, Any]:
 
 
 def aggregate_records(records: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
-    daily_channel: dict[tuple[str, str], dict[str, float]] = defaultdict(lambda: {"qty": 0.0, "sales": 0.0})
-    monthly_channel: dict[tuple[str, str], dict[str, float]] = defaultdict(lambda: {"qty": 0.0, "sales": 0.0})
+    daily_channel: dict[tuple[str, str], dict[str, Any]] = defaultdict(lambda: _new_amount_bucket())
+    monthly_channel: dict[tuple[str, str], dict[str, Any]] = defaultdict(lambda: _new_amount_bucket())
+    channel_totals: dict[str, dict[str, Any]] = defaultdict(lambda: _new_amount_bucket())
     product_totals: dict[str, dict[str, Any]] = defaultdict(
-        lambda: {"qty": 0.0, "sales": 0.0, "channels": set(), "display_name": ""}
+        lambda: {
+            "qty": 0.0,
+            "sales": 0.0,
+            "gross_sales": 0.0,
+            "net_sales": 0.0,
+            "supply_amount": 0.0,
+            "delivery_amount": 0.0,
+            "channels": set(),
+            "display_name": "",
+            "sku": "",
+        }
     )
-    channel_product: dict[tuple[str, str], dict[str, float]] = defaultdict(lambda: {"qty": 0.0, "sales": 0.0})
-    daily_product: dict[tuple[str, str], dict[str, float]] = defaultdict(lambda: {"qty": 0.0, "sales": 0.0})
+    channel_product: dict[tuple[str, str], dict[str, Any]] = defaultdict(lambda: _new_amount_bucket())
+    daily_product: dict[tuple[str, str], dict[str, Any]] = defaultdict(lambda: _new_amount_bucket())
     product_names: dict[str, str] = {}
+    channel_metadata: dict[str, dict[str, Any]] = {}
 
     for record in records:
         vendor_name = str(record.get("vendor_name", ""))
@@ -357,48 +424,126 @@ def aggregate_records(records: list[dict[str, Any]]) -> dict[str, list[dict[str,
         business_month = str(record.get("business_month", ""))
         product_key = str(record.get("normalized_product_name") or record.get("product_name", "(unknown)"))
         product_name = str(record.get("product_name", product_key))
+        sku = str(record.get("sku", "") or "")
         qty = float(record.get("qty", 0) or 0)
         sales = float(record.get("sales", 0) or 0)
+        gross_sales = float(record.get("gross_sales", 0) or 0)
+        net_sales = float(record.get("net_sales", 0) or 0)
+        supply_amount = float(record.get("supply_amount", 0) or 0)
+        delivery_amount = float(record.get("delivery_amount", 0) or 0)
+        revenue_basis = str(record.get("revenue_basis", "") or "")
+        date_basis = str(record.get("date_basis", "") or "")
+
+        if vendor_name:
+            meta = channel_metadata.setdefault(
+                vendor_name,
+                {
+                    "vendor_name": vendor_name,
+                    "revenue_basis": revenue_basis,
+                    "date_basis": date_basis,
+                    "collection_mode": str(record.get("collection_mode", "") or ""),
+                    "validation_mode": str(record.get("validation_mode", "") or ""),
+                    "queue_id": str(record.get("queue_id", "") or ""),
+                    "browser_policy": str(record.get("browser_policy", "") or ""),
+                    "verification_mode": str(record.get("verification_mode", "") or ""),
+                },
+            )
+            if not meta["revenue_basis"] and revenue_basis:
+                meta["revenue_basis"] = revenue_basis
+            if not meta["date_basis"] and date_basis:
+                meta["date_basis"] = date_basis
 
         if business_date:
-            daily_channel[(business_date, vendor_name)]["qty"] += qty
-            daily_channel[(business_date, vendor_name)]["sales"] += sales
-            daily_product[(business_date, product_key)]["qty"] += qty
-            daily_product[(business_date, product_key)]["sales"] += sales
+            update_amount_bucket(daily_channel[(business_date, vendor_name)], qty, sales, gross_sales, net_sales, supply_amount, delivery_amount, revenue_basis, date_basis)
+            update_amount_bucket(daily_product[(business_date, product_key)], qty, sales, gross_sales, net_sales, supply_amount, delivery_amount, revenue_basis, date_basis)
         if business_month:
-            monthly_channel[(business_month, vendor_name)]["qty"] += qty
-            monthly_channel[(business_month, vendor_name)]["sales"] += sales
+            update_amount_bucket(monthly_channel[(business_month, vendor_name)], qty, sales, gross_sales, net_sales, supply_amount, delivery_amount, revenue_basis, date_basis)
+        update_amount_bucket(channel_totals[vendor_name], qty, sales, gross_sales, net_sales, supply_amount, delivery_amount, revenue_basis, date_basis)
         product_totals[product_key]["qty"] += qty
         product_totals[product_key]["sales"] += sales
+        product_totals[product_key]["gross_sales"] += gross_sales
+        product_totals[product_key]["net_sales"] += net_sales
+        product_totals[product_key]["supply_amount"] += supply_amount
+        product_totals[product_key]["delivery_amount"] += delivery_amount
         product_totals[product_key]["channels"].add(vendor_name)
+        if not product_totals[product_key]["sku"] and sku:
+            product_totals[product_key]["sku"] = sku
         if not product_totals[product_key]["display_name"]:
             product_totals[product_key]["display_name"] = product_name
         product_names[product_key] = product_totals[product_key]["display_name"] or product_name
-        channel_product[(vendor_name, product_key)]["qty"] += qty
-        channel_product[(vendor_name, product_key)]["sales"] += sales
+        update_amount_bucket(channel_product[(vendor_name, product_key)], qty, sales, gross_sales, net_sales, supply_amount, delivery_amount, revenue_basis, date_basis)
 
     return {
         "daily_channel_sales": sort_rows(
             [
-                {"business_date": key[0], "vendor_name": key[1], "qty": round(value["qty"], 2), "sales": round(value["sales"], 2)}
+                {
+                    "business_date": key[0],
+                    "vendor_name": key[1],
+                    "revenue_basis": value["revenue_basis"],
+                    "date_basis": value["date_basis"],
+                    "qty": round(value["qty"], 2),
+                    "sales": round(value["sales"], 2),
+                    "gross_sales": round(value["gross_sales"], 2),
+                    "net_sales": round(value["net_sales"], 2),
+                    "supply_amount": round(value["supply_amount"], 2),
+                    "delivery_amount": round(value["delivery_amount"], 2),
+                }
                 for key, value in daily_channel.items()
             ],
             ["business_date", "vendor_name"],
         ),
         "monthly_channel_sales": sort_rows(
             [
-                {"business_month": key[0], "vendor_name": key[1], "qty": round(value["qty"], 2), "sales": round(value["sales"], 2)}
+                {
+                    "business_month": key[0],
+                    "vendor_name": key[1],
+                    "revenue_basis": value["revenue_basis"],
+                    "date_basis": value["date_basis"],
+                    "qty": round(value["qty"], 2),
+                    "sales": round(value["sales"], 2),
+                    "gross_sales": round(value["gross_sales"], 2),
+                    "net_sales": round(value["net_sales"], 2),
+                    "supply_amount": round(value["supply_amount"], 2),
+                    "delivery_amount": round(value["delivery_amount"], 2),
+                }
                 for key, value in monthly_channel.items()
             ],
             ["business_month", "vendor_name"],
         ),
+        "channel_totals": sorted(
+            [
+                {
+                    "vendor_name": vendor_name,
+                    "revenue_basis": channel_metadata.get(vendor_name, {}).get("revenue_basis", value["revenue_basis"]),
+                    "date_basis": channel_metadata.get(vendor_name, {}).get("date_basis", value["date_basis"]),
+                    "collection_mode": channel_metadata.get(vendor_name, {}).get("collection_mode", ""),
+                    "validation_mode": channel_metadata.get(vendor_name, {}).get("validation_mode", ""),
+                    "queue_id": channel_metadata.get(vendor_name, {}).get("queue_id", ""),
+                    "browser_policy": channel_metadata.get(vendor_name, {}).get("browser_policy", ""),
+                    "verification_mode": channel_metadata.get(vendor_name, {}).get("verification_mode", ""),
+                    "qty": round(value["qty"], 2),
+                    "sales": round(value["sales"], 2),
+                    "gross_sales": round(value["gross_sales"], 2),
+                    "net_sales": round(value["net_sales"], 2),
+                    "supply_amount": round(value["supply_amount"], 2),
+                    "delivery_amount": round(value["delivery_amount"], 2),
+                }
+                for vendor_name, value in channel_totals.items()
+            ],
+            key=lambda item: (-item["sales"], item["vendor_name"]),
+        ),
         "product_sales": sorted(
             [
                 {
+                    "sku": value["sku"],
                     "product_name": value["display_name"] or key,
                     "normalized_product_name": key,
                     "sales": round(value["sales"], 2),
                     "qty": round(value["qty"], 2),
+                    "gross_sales": round(value["gross_sales"], 2),
+                    "net_sales": round(value["net_sales"], 2),
+                    "supply_amount": round(value["supply_amount"], 2),
+                    "delivery_amount": round(value["delivery_amount"], 2),
                     "channel_count": len(value["channels"]),
                 }
                 for key, value in product_totals.items()
@@ -408,10 +553,15 @@ def aggregate_records(records: list[dict[str, Any]]) -> dict[str, list[dict[str,
         "product_qty": sorted(
             [
                 {
+                    "sku": value["sku"],
                     "product_name": value["display_name"] or key,
                     "normalized_product_name": key,
                     "qty": round(value["qty"], 2),
                     "sales": round(value["sales"], 2),
+                    "gross_sales": round(value["gross_sales"], 2),
+                    "net_sales": round(value["net_sales"], 2),
+                    "supply_amount": round(value["supply_amount"], 2),
+                    "delivery_amount": round(value["delivery_amount"], 2),
                     "channel_count": len(value["channels"]),
                 }
                 for key, value in product_totals.items()
@@ -422,10 +572,16 @@ def aggregate_records(records: list[dict[str, Any]]) -> dict[str, list[dict[str,
             [
                 {
                     "vendor_name": key[0],
+                    "revenue_basis": channel_metadata.get(key[0], {}).get("revenue_basis", value["revenue_basis"]),
+                    "date_basis": channel_metadata.get(key[0], {}).get("date_basis", value["date_basis"]),
                     "product_name": product_names.get(key[1], key[1]),
                     "normalized_product_name": key[1],
                     "qty": round(value["qty"], 2),
                     "sales": round(value["sales"], 2),
+                    "gross_sales": round(value["gross_sales"], 2),
+                    "net_sales": round(value["net_sales"], 2),
+                    "supply_amount": round(value["supply_amount"], 2),
+                    "delivery_amount": round(value["delivery_amount"], 2),
                 }
                 for key, value in channel_product.items()
             ],
@@ -439,11 +595,16 @@ def aggregate_records(records: list[dict[str, Any]]) -> dict[str, list[dict[str,
                     "normalized_product_name": key[1],
                     "qty": round(value["qty"], 2),
                     "sales": round(value["sales"], 2),
+                    "gross_sales": round(value["gross_sales"], 2),
+                    "net_sales": round(value["net_sales"], 2),
+                    "supply_amount": round(value["supply_amount"], 2),
+                    "delivery_amount": round(value["delivery_amount"], 2),
                 }
                 for key, value in daily_product.items()
             ],
             key=lambda item: (item["business_date"], -item["sales"], item["product_name"]),
         ),
+        "channel_definitions": sorted(channel_metadata.values(), key=lambda item: item["vendor_name"]),
     }
 
 
@@ -452,14 +613,26 @@ def build_summary(aggregates: dict[str, list[dict[str, Any]]], analyses: list[di
     total_qty = round(sum(item["qty"] for item in aggregates["product_qty"]), 2)
     channels = sorted({item["vendor_name"] for item in aggregates["channel_product_sales"] if item["vendor_name"]})
     dates = sorted({item["business_date"] for item in aggregates["daily_channel_sales"] if item["business_date"]})
+    basis_rows = aggregates.get("channel_totals", [])
+    revenue_bases = sorted({item.get("revenue_basis", "") for item in basis_rows if item.get("revenue_basis")})
+    date_bases = sorted({item.get("date_basis", "") for item in basis_rows if item.get("date_basis")})
     return {
         "total_sales": total_sales,
         "total_qty": total_qty,
         "channel_count": len(channels),
         "date_count": len(dates),
-        "top_channels": top_rows(aggregates["daily_channel_sales"], key="sales", label="vendor_name", limit=5),
+        "total_gross_sales": round(sum(item.get("gross_sales", 0) or 0 for item in aggregates["product_sales"]), 2),
+        "total_net_sales": round(sum(item.get("net_sales", 0) or 0 for item in aggregates["product_sales"]), 2),
+        "total_supply_amount": round(sum(item.get("supply_amount", 0) or 0 for item in aggregates["product_sales"]), 2),
+        "total_delivery_amount": round(sum(item.get("delivery_amount", 0) or 0 for item in aggregates["product_sales"]), 2),
+        "revenue_basis_count": len(revenue_bases),
+        "date_basis_count": len(date_bases),
+        "revenue_bases": revenue_bases,
+        "date_bases": date_bases,
+        "top_channels": top_rows(aggregates["channel_totals"], key="sales", label="vendor_name", limit=5),
         "top_products_by_sales": top_rows(aggregates["product_sales"], key="sales", label="product_name", limit=10),
         "top_products_by_qty": top_rows(aggregates["product_qty"], key="qty", label="product_name", limit=10),
+        "channel_definitions": basis_rows,
         "source_files": len(analyses),
     }
 
@@ -478,8 +651,14 @@ def export_report_workbook(path: Path, report: dict[str, Any]) -> None:
             {"metric": "record_count", "value": report["record_count"]},
             {"metric": "total_sales", "value": report["summary"]["total_sales"]},
             {"metric": "total_qty", "value": report["summary"]["total_qty"]},
+            {"metric": "total_gross_sales", "value": report["summary"]["total_gross_sales"]},
+            {"metric": "total_net_sales", "value": report["summary"]["total_net_sales"]},
+            {"metric": "total_supply_amount", "value": report["summary"]["total_supply_amount"]},
+            {"metric": "total_delivery_amount", "value": report["summary"]["total_delivery_amount"]},
             {"metric": "channel_count", "value": report["summary"]["channel_count"]},
             {"metric": "date_count", "value": report["summary"]["date_count"]},
+            {"metric": "revenue_basis_count", "value": report["summary"]["revenue_basis_count"]},
+            {"metric": "date_basis_count", "value": report["summary"]["date_basis_count"]},
         ],
     )
     add_sheet(
@@ -489,6 +668,7 @@ def export_report_workbook(path: Path, report: dict[str, Any]) -> None:
             {"metric": "channel_output_contract_id", "value": CHANNEL_OUTPUT_CONTRACT_ID},
             {"metric": "excel_postprocess_ruleset_id", "value": EXCEL_POSTPROCESS_RULESET_ID},
             {"metric": "product_analysis_master_schema_id", "value": PRODUCT_ANALYSIS_MASTER_SCHEMA_ID},
+            {"metric": "channel_operating_model_id", "value": report["standards"]["channel_operating_model"]["id"]},
             {"metric": "group_by", "value": "normalized_product_name"},
         ],
     )
@@ -502,12 +682,16 @@ def export_report_workbook(path: Path, report: dict[str, Any]) -> None:
                 "path": item.get("file", item.get("path", "")),
                 "row_count": item.get("row_count", 0),
                 "product_count": item.get("product_count", 0),
+                "revenue_basis": item.get("channel_summary", {}).get("revenue_basis", item.get("operation_profile", {}).get("revenue_basis", "")),
+                "date_basis": item.get("channel_summary", {}).get("date_basis", item.get("operation_profile", {}).get("date_basis", "")),
                 "sales": item.get("totals", {}).get("sales", 0),
                 "qty": item.get("totals", {}).get("qty", 0),
             }
             for item in report["analyses"]
         ],
     )
+    add_sheet(workbook, "ChannelDefinitions", report["summary"]["channel_definitions"])
+    add_sheet(workbook, "ChannelTotals", report["aggregates"]["channel_totals"])
     add_sheet(workbook, "DailyChannelSales", report["aggregates"]["daily_channel_sales"])
     add_sheet(workbook, "MonthlyChannelSales", report["aggregates"]["monthly_channel_sales"])
     add_sheet(workbook, "ProductSales", report["aggregates"]["product_sales"])
@@ -532,7 +716,7 @@ def add_sheet(workbook: Workbook, title: str, rows: list[dict[str, Any]]) -> Non
         for column_index, header in enumerate(headers, start=1):
             value = row.get(header, "")
             cell = sheet.cell(row=row_index, column=column_index, value=value)
-            if header in {"sales", "qty", "total_sales", "total_qty", "value"} and isinstance(value, (int, float)):
+            if header in {"sales", "qty", "total_sales", "total_qty", "gross_sales", "net_sales", "supply_amount", "delivery_amount", "value"} and isinstance(value, (int, float)):
                 cell.number_format = "#,##0.00"
     sheet.freeze_panes = "A2"
     sheet.auto_filter.ref = sheet.dimensions
@@ -551,13 +735,30 @@ def build_summary_markdown(report: dict[str, Any]) -> str:
         f"- 레코드 수: {report['record_count']}",
         f"- 총 매출액: {summary['total_sales']:.2f}",
         f"- 총 판매량: {summary['total_qty']:.2f}",
+        f"- 총 주문/총매출 기준 합계: {summary['total_gross_sales']:.2f}",
+        f"- 총 순매출 기준 합계: {summary['total_net_sales']:.2f}",
+        f"- 총 공급/입고 기준 합계: {summary['total_supply_amount']:.2f}",
+        f"- 총 납품 기준 합계: {summary['total_delivery_amount']:.2f}",
         f"- 채널 수: {summary['channel_count']}",
         f"- 집계 일수: {summary['date_count']}",
+        f"- 매출 기준 종류 수: {summary['revenue_basis_count']}",
+        f"- 기준일 종류 수: {summary['date_basis_count']}",
         "",
-        "## 상위 채널",
+        "## 집계 기준 요약",
     ]
+    for item in summary["channel_definitions"]:
+        lines.append(
+            f"- {item['vendor_name']}: 매출기준={item.get('revenue_basis', '') or '미정'} / 기준일={item.get('date_basis', '') or '미정'} / 수집방식={item.get('collection_mode', '') or '미정'}"
+        )
+    lines.extend(
+        [
+            "",
+            "## 상위 채널",
+        ]
+    )
     for item in summary["top_channels"]:
-        lines.append(f"- {item['label']}: {item['value']:.2f}")
+        basis = next((row.get("revenue_basis", "") for row in summary["channel_definitions"] if row.get("vendor_name") == item["label"]), "")
+        lines.append(f"- {item['label']}: {item['value']:.2f}" + (f" ({basis})" if basis else ""))
     lines.extend(["", "## 상위 품목(매출액)"])
     for item in summary["top_products_by_sales"]:
         lines.append(f"- {item['label']}: {item['value']:.2f}")
@@ -570,10 +771,47 @@ def build_summary_markdown(report: dict[str, Any]) -> str:
             "## 첨부",
             "- 엑셀 리포트: 일별/월별 채널 매출, 품목별 매출, 품목별 판매량, 채널별 품목 매출 포함",
             "- 요약 문서: 상위 채널/품목, 전체 합계 포함",
+            "- 채널 정의 시트: 매출 기준, 기준일, 수집방식, 검증방식 포함",
             "- 품목 집계 기준: normalized_product_name 마스터 스키마 적용",
         ]
     )
     return "\n".join(lines) + "\n"
+
+
+def _new_amount_bucket() -> dict[str, Any]:
+    return {
+        "qty": 0.0,
+        "sales": 0.0,
+        "gross_sales": 0.0,
+        "net_sales": 0.0,
+        "supply_amount": 0.0,
+        "delivery_amount": 0.0,
+        "revenue_basis": "",
+        "date_basis": "",
+    }
+
+
+def update_amount_bucket(
+    bucket: dict[str, Any],
+    qty: float,
+    sales: float,
+    gross_sales: float,
+    net_sales: float,
+    supply_amount: float,
+    delivery_amount: float,
+    revenue_basis: str,
+    date_basis: str,
+) -> None:
+    bucket["qty"] += qty
+    bucket["sales"] += sales
+    bucket["gross_sales"] += gross_sales
+    bucket["net_sales"] += net_sales
+    bucket["supply_amount"] += supply_amount
+    bucket["delivery_amount"] += delivery_amount
+    if not bucket.get("revenue_basis") and revenue_basis:
+        bucket["revenue_basis"] = revenue_basis
+    if not bucket.get("date_basis") and date_basis:
+        bucket["date_basis"] = date_basis
 
 
 def create_email_draft(

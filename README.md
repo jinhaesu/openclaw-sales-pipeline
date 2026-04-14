@@ -84,7 +84,7 @@ python3 -m src.openclaw_sales_pipeline.cli report-bundle --input-root run_output
 - `ingest-downloads`: Downloads를 재귀 스캔해서 채널별 폴더로 복사 또는 이동하고, 분석 JSON까지 바로 만든다.
 - `report-bundle`: 다운로드 파일과 분석 JSON을 모아 통합 엑셀 리포트, 요약 문서, 메일 초안을 만든다.
 - `smtp-check`: SMTP 설정이 실제 발송 가능한 상태인지 점검한다.
-- `summarize-runs`: 실행 결과를 인증 대기, 재로그인, selector 수정, 환경 제약 큐로 요약한다.
+- `summarize-runs`: 실행 결과를 인증 대기, 재로그인, selector 수정, 환경 제약 큐로 요약하고 `오늘 바로 돌릴 채널 / 인증 대기 / 레거시 집중채널` 추천을 만든다.
 - `export-standards`: 채널 출력 계약, 엑셀 후처리 규칙집, 품목 분석 마스터 스키마, 채널 운영 모델 JSON을 내보낸다.
 - `export-operations`: 채널 운영 큐, 인증 우선순위, 레거시 우회 경로, 채널별 확정 기준 번들을 내보낸다.
 
@@ -96,6 +96,7 @@ python3 -m src.openclaw_sales_pipeline.cli report-bundle --input-root run_output
 - 리포트 집계는 원본 `product_name` 대신 `normalized_product_name`을 우선 사용한다.
 - 채널별 플레이북은 `postprocess_rules`로 추가 규칙을 덧씌울 수 있다.
 - 채널별 workflow knowledge에는 `operations_profile`이 추가돼서 매출 기준, 기준일, 브라우저 정책, 세션 전략을 함께 본다.
+- 리포트 번들은 `revenue_basis`, `date_basis`, `collection_mode`, `validation_mode`를 요약 문서와 엑셀 `ChannelDefinitions` 시트에 함께 남긴다.
 
 ## 비밀키 설정
 예시 파일은 [`/Users/joinerhs/Documents/New project/config/secrets.example.json`](/Users/joinerhs/Documents/New%20project/config/secrets.example.json)에 있다.
@@ -178,14 +179,16 @@ python3 -m playwright install chromium
 - Reporting:
   - 다운로드 파일/분석 JSON을 모아 통합 레코드 생성
   - `Standards` 시트에 적용한 출력 계약과 스키마 ID 기록
-  - 일별 채널 매출, 월별 채널 매출, 품목별 매출, 품목별 판매량, 채널별 품목 매출 엑셀 시트 생성
+  - 일별 채널 매출, 월별 채널 매출, 품목별 매출, 품목별 판매량, 채널별 품목 매출, 채널 정의 시트 생성
   - 요약 Markdown과 `.eml` 메일 초안 생성
-  - SMTP 설정이 있으면 실제 메일 발송 가능
+  - 요약 문서에 채널별 매출 기준, 기준일, 수집방식을 먼저 적는다
+- SMTP 설정이 있으면 실제 메일 발송 가능
 - Validation:
   - 플레이북/비밀키/브라우저 액션 커버리지를 한 번에 점검
 - Run status ledger:
   - `result.json`, `browser_error.json`, `api_error.json`, 다운로드 파일 존재 여부를 종합해 채널 상태를 표준 분류
   - 인증 대기 큐, 재로그인 큐, selector 수정 큐를 자동 생성
+  - 최신 실행 기준으로 `오늘 바로 돌릴 채널`, `인증 대기`, `레거시 집중채널` 추천을 자동 생성
 - Operations bundle:
   - 채널별 `queue_id`, `revenue_basis`, `date_basis`, `collection_mode`, `validation_mode`, `browser_policy`, `session_strategy`를 JSON/Markdown으로 내보냄
  - Execution policy:
