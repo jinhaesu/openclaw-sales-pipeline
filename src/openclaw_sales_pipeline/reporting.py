@@ -4,6 +4,7 @@ import base64
 import json
 import mimetypes
 import smtplib
+import time
 from collections import defaultdict
 from dataclasses import asdict
 from datetime import datetime
@@ -978,18 +979,47 @@ def send_resend_email(
         },
         method="POST",
     )
-    try:
-        with urlrequest.urlopen(request, timeout=30) as response:
-            response_body = response.read().decode("utf-8")
-        parsed = json.loads(response_body or "{}")
-        if parsed.get("id"):
-            return True, ""
-        return False, f"resend_unexpected_response:{response_body[:240]}"
-    except urlerror.HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="replace")
-        return False, f"resend_http_error:{exc.code}:{body[:240]}"
-    except Exception as exc:
-        return False, f"resend_request_failed:{type(exc).__name__}:{str(exc)[:240]}"
+    max_attempts = int(config.get("max_attempts", 3) or 3)
+    last_error = ""
+    for attempt in range(1, max_attempts + 1):
+        try:
+            with urlrequest.urlopen(request, timeout=30) as response:
+                response_body = response.read().decode("utf-8")
+            parsed = json.loads(response_body or "{}")
+            if parsed.get("id"):
+                return True, ""
+            last_error = f"resend_unexpected_response:{response_body[:240]}"
+            if attempt < max_attempts:
+                time.sleep(resend_backoff_seconds(attempt))
+                continue
+            return False, last_error
+        except urlerror.HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="replace")
+            last_error = f"resend_http_error:{exc.code}:{body[:240]}"
+            if attempt < max_attempts and is_retryable_resend_status(exc.code):
+                time.sleep(resend_backoff_seconds(attempt, exc.headers.get("Retry-After")))
+                continue
+            return False, last_error
+        except Exception as exc:
+            last_error = f"resend_request_failed:{type(exc).__name__}:{str(exc)[:240]}"
+            if attempt < max_attempts:
+                time.sleep(resend_backoff_seconds(attempt))
+                continue
+            return False, last_error
+    return False, last_error or "resend_unknown_failure"
+
+
+def is_retryable_resend_status(status_code: int) -> bool:
+    return status_code in {408, 409, 425, 429, 500, 502, 503, 504}
+
+
+def resend_backoff_seconds(attempt: int, retry_after: str | None = None) -> float:
+    if retry_after:
+        try:
+            return max(0.5, min(float(retry_after), 30.0))
+        except ValueError:
+            pass
+    return min(2 ** (attempt - 1), 8)
 
 
 def top_rows(rows: list[dict[str, Any]], key: str, label: str, limit: int) -> list[dict[str, Any]]:
