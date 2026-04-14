@@ -56,16 +56,41 @@
       "url_contains": "NaPeriod.jsp"
     },
     {
+      "type": "eval_in_frame",
+      "frame_url_contains": "NaPeriod.jsp",
+      "expression": "() => { document.querySelector('#fromdate').value = '{{business_date}}'; document.querySelector('#todate').value = '{{business_date}}'; document.querySelector('input[name=\"fromtime\"]').value = '{{business_date_compact}}'; document.querySelector('input[name=\"totime\"]').value = '{{business_date_compact}}'; }"
+    },
+    {
+      "type": "wait_for_timeout",
+      "ms": 500
+    },
+    {
+      "type": "eval_in_frame",
+      "frame_url_contains": "NaPeriod.jsp",
+      "expression": "searchList()"
+    },
+    {
+      "type": "wait_for_timeout",
+      "ms": 5000
+    },
+    {
       "type": "screenshot",
-      "path": "na_period.png"
+      "path": "na_period_results.png"
+    },
+    {
+      "type": "download_url_from_frame_expression",
+      "frame_url_contains": "NaPeriod.jsp",
+      "path": "downloads/gs25_period.xls",
+      "expression": "() => { const f = document.prod_period01; const shCode = f.Shopcd.value; const shName = f.Shopname.value; const addParam = '&Shopcd=' + shCode + '&Shopname=' + shName; return '../../servlet/PerformedServlet?jspfile=napm/NaPeriod.jsp&xlsfile=excel/NaPeriodExcel.jsp&fromtime=' + f.fromtime.value + '&totime=' + f.totime.value + '&Crcucmpcd=' + f.Crcucmpcd.value + '&Exchshpcd=' + f.Exchshpcd.value + '&fromdate=' + f.fromdate.value + '&todate=' + f.todate.value + addParam; }"
     },
     {
       "type": "note",
-      "message": "부가정보 > 납품정보 > 기간별 화면까지 도달한 뒤 다운로드 selector를 추가한다."
+      "message": "부가정보 > 납품정보 > 기간별 화면에서 기간 조회 후 Excel 다운로드까지 수행한다."
     }
   ],
   "notes": [
     "실화면 기준 로그인 자동화 적용",
-    "부가정보 > 납품정보 > 기간별 프레임 진입 확인"
+    "부가정보 > 납품정보 > 기간별 프레임 진입 확인",
+    "실행일 기준 단일일자 조회 후 Excel 파일 직접 다운로드"
   ]
 }

@@ -3,28 +3,35 @@
   "strategy": "browser_download",
   "browser_actions": [
     {
-      "type": "goto"
+      "type": "goto",
+      "url": "https://activescm.co.kr/Homeplus/vdprpt7list/le1_bd_lis7.do"
     },
     {
       "type": "wait_for_timeout",
-      "ms": 1500
+      "ms": 2000
     },
     {
       "type": "fill_selector",
       "selector": "#loginId",
       "source": "id",
-      "fallback_selectors": ["input[name='loginId']"]
+      "fallback_selectors": ["input[name='loginId']"],
+      "optional": true,
+      "timeout_ms": 5000
     },
     {
       "type": "fill_selector",
       "selector": "#loginPw",
       "source": "pw",
-      "fallback_selectors": ["input[name='loginPw']"]
+      "fallback_selectors": ["input[name='loginPw']"],
+      "optional": true,
+      "timeout_ms": 5000
     },
     {
       "type": "click_selector",
       "selector": "#btn_login",
-      "fallback_selectors": ["button#btn_login"]
+      "fallback_selectors": ["button#btn_login"],
+      "optional": true,
+      "timeout_ms": 5000
     },
     {
       "type": "wait_for_timeout",
@@ -35,13 +42,45 @@
       "path": "after_login.png"
     },
     {
+      "type": "goto",
+      "url": "https://activescm.co.kr/Homeplus/vdprpt7list/le1_bd_lis7.do"
+    },
+    {
+      "type": "wait_for_timeout",
+      "ms": 5000
+    },
+    {
+      "type": "fill_selector",
+      "selector": "#datepicker01",
+      "value": "{{business_date}}"
+    },
+    {
+      "type": "fill_selector",
+      "selector": "#datepicker02",
+      "value": "{{business_date}}"
+    },
+    {
+      "type": "wait_for_timeout",
+      "ms": 500
+    },
+    {
+      "type": "screenshot",
+      "path": "delivery_by_date.png"
+    },
+    {
+      "type": "download_post_from_page_expression",
+      "path": "downloads/homeplus_delivery.csv",
+      "expression": "() => { const cPath = window.cPath || '/Homeplus'; const getValue = (selector) => document.querySelector(selector)?.value || ''; const getText = (selector) => (document.querySelector(selector)?.textContent || '').trim(); const getSelectedText = (selector) => document.querySelector(`${selector} option:checked`)?.textContent?.trim() || ''; const vendorArray = getValue('#VENDOR_CODE').split(',').filter(Boolean).map((item) => `'${item}'`); const sTab = window.main?.sTab || ''; return { url: `${cPath}/vdprpt7list/excelDown.do`, form: { HOUSE_CODE: '100', COMPANY_CODE: '100', GR_DATE1: getValue('#datepicker01').replaceAll('-', ''), GR_DATE2: getValue('#datepicker02').replaceAll('-', ''), VENDOR_CODE: vendorArray.join(','), DEPT_CODE1: getValue('#DEPT_CODE1'), DEPT_CODE2: getValue('#DEPT_CODE2'), STORE_TYPE: getValue('#STORE_TYPE'), STORE_TYPE_TEXT: getSelectedText('#STORE_TYPE'), SECTION_CODE1: getValue('#SECTION_CODE1'), SECTION_CODE2: getValue('#SECTION_CODE2'), BUYER_CODE: getValue('#BUYER_CODE'), BUYER_NM: getText('#BUYER_NM'), STORE_CODE: getText('#STORE_CODE'), PO_TYPE: getValue('#PO_TYPE'), PO_TYPE_TEXT: getSelectedText('#PO_TYPE'), CARRY_TYPE: getValue('#CARRY_TYPE'), CARRY_TYPE_TEXT: getSelectedText('#CARRY_TYPE'), HEADER_TABLE: `TE_VDPRPT_HEADER${sTab}`, DETAIL_TABLE: `TE_VDPRPT_DETAIL${sTab}` } }; }"
+    },
+    {
       "type": "note",
-      "message": "홈플러스는 로그인 후 부가정보 > 납품정보 > 일일정보 > 일자별정보 흐름을 discovery로 추가 고정한다."
+      "message": "홈플러스는 일자별/배송처별 조회 화면에서 hidden form POST로 CSV를 다운로드한다."
     }
   ],
   "notes": [
     "로그인 화면 실제 selector 적용",
-    "로그인 후 다운로드 경로는 후속 discovery로 고정"
+    "로그인 후 미납관리 > 납품현황조회 > 일자별/배송처별 조회로 이동",
+    "CSV받기 버튼으로 파일 다운로드"
   ],
   "metadata": {
     "reuse_session_state": true

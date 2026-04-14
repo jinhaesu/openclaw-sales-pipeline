@@ -1,14 +1,42 @@
 from __future__ import annotations
 
+import cgi
 import json
+import re
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
+from urllib.parse import urljoin
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 
 from ..models import Job, JobResult
 from .base import BaseCollector
 
 
 class BrowserCollector(BaseCollector):
+    def build_template_context(self, job: Job) -> dict[str, str]:
+        business_date = date.fromisoformat(job.business_date)
+        return {
+            "{{business_date}}": job.business_date,
+            "{{business_date_compact}}": business_date.strftime("%Y%m%d"),
+            "{{business_date_minus_1}}": (business_date - timedelta(days=1)).isoformat(),
+            "{{business_date_minus_1_compact}}": (business_date - timedelta(days=1)).strftime("%Y%m%d"),
+            "{{login_url}}": job.login_url,
+        }
+
+    def render_templates(self, value: Any, context: dict[str, str]) -> Any:
+        if isinstance(value, str):
+            rendered = value
+            for token, replacement in context.items():
+                rendered = rendered.replace(token, replacement)
+            return rendered
+        if isinstance(value, list):
+            return [self.render_templates(item, context) for item in value]
+        if isinstance(value, dict):
+            return {key: self.render_templates(item, context) for key, item in value.items()}
+        return value
+
     def find_frame(self, page, action: dict[str, Any]):
         frame_name = action.get("frame_name")
         frame_url_contains = action.get("frame_url_contains")
@@ -58,10 +86,47 @@ class BrowserCollector(BaseCollector):
         if action_type in {"click_text", "click_text_in_frame"}:
             for text in action.get("fallback_texts", []):
                 variants.append({**action, "text": text})
-        if action_type in {"click_selector", "fill_selector", "type_selector"}:
+        if action_type in {"click_selector", "fill_selector", "type_selector", "download_click_selector"}:
             for selector in action.get("fallback_selectors", []):
                 variants.append({**action, "selector": selector})
         return variants
+
+    def resolve_output_path(self, output_dir: Path, raw_path: str | None, default_name: str) -> Path:
+        relative = raw_path or default_name
+        path = Path(relative)
+        if not path.is_absolute():
+            path = output_dir / path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        return path
+
+    def infer_download_name(self, headers, fallback: str) -> str:
+        content_disposition = headers.get("Content-Disposition", "")
+        if not content_disposition:
+            return fallback
+        _value, params = cgi.parse_header(content_disposition)
+        filename = params.get("filename")
+        return filename or fallback
+
+    def decode_payload_text(self, payload: bytes) -> str:
+        for encoding in ("utf-8", "cp949", "latin1"):
+            try:
+                return payload.decode(encoding)
+            except Exception:
+                continue
+        return payload.decode("latin1", errors="ignore")
+
+    def no_data_path(self, path: Path) -> Path:
+        return path.with_suffix(".no_data.html")
+
+    def is_html_interstitial(self, payload: bytes) -> bool:
+        lowered = self.decode_payload_text(payload[:4096]).lower()
+        return "<script" in lowered and "downloadfrm" in lowered
+
+    def extract_match(self, pattern: str, text: str, default: str = "") -> str:
+        match = re.search(pattern, text, re.MULTILINE)
+        if not match:
+            return default
+        return match.group(1)
 
     def perform_action(self, page, output_dir: Path, action: dict[str, Any], credentials: dict[str, Any]) -> dict[str, Any]:
         action_type = action.get("type")
@@ -76,6 +141,16 @@ class BrowserCollector(BaseCollector):
         if action_type == "eval":
             page.evaluate(action.get("expression", ""))
             return {"type": "eval"}
+        if action_type == "eval_in_frame":
+            target_frame = self.find_frame(page, action)
+            if target_frame is None:
+                raise RuntimeError(f"frame not found for action: {action}")
+            target_frame.evaluate(action.get("expression", ""))
+            return {
+                "type": "eval_in_frame",
+                "frame_name": action.get("frame_name"),
+                "frame_url_contains": action.get("frame_url_contains"),
+            }
         if action_type == "eval_dump":
             path = output_dir / action.get("path", "eval_dump.json")
             data = page.evaluate(action.get("expression", ""))
@@ -83,8 +158,21 @@ class BrowserCollector(BaseCollector):
             return {"type": "eval_dump", "path": str(path)}
         if action_type == "click_selector":
             selector = action.get("selector", "")
-            page.locator(selector).first.click(timeout=15000)
+            try:
+                page.locator(selector).first.click(timeout=int(action.get("timeout_ms", 15000)))
+            except Exception:
+                if action.get("optional"):
+                    return {"type": "click_selector", "selector": selector, "skipped": True}
+                raise
             return {"type": "click_selector", "selector": selector}
+        if action_type == "download_click_selector":
+            selector = action.get("selector", "")
+            with page.expect_download(timeout=int(action.get("timeout_ms", 30000))) as download_info:
+                page.locator(selector).first.click(timeout=15000)
+            download = download_info.value
+            path = self.resolve_output_path(output_dir, action.get("path"), download.suggested_filename or "download.bin")
+            download.save_as(str(path))
+            return {"type": "download_click_selector", "selector": selector, "path": str(path)}
         if action_type == "click_text":
             text = action.get("text", "")
             exact = bool(action.get("exact", False))
@@ -132,7 +220,12 @@ class BrowserCollector(BaseCollector):
             source = action.get("source", "")
             if source:
                 value = credentials.get(source, "")
-            page.locator(selector).first.fill(str(value), timeout=15000)
+            try:
+                page.locator(selector).first.fill(str(value), timeout=int(action.get("timeout_ms", 15000)))
+            except Exception:
+                if action.get("optional"):
+                    return {"type": "fill_selector", "selector": selector, "source": source or None, "present": bool(value), "skipped": True}
+                raise
             return {"type": "fill_selector", "selector": selector, "source": source or None, "present": bool(value)}
         if action_type == "type_selector":
             selector = action.get("selector", "")
@@ -180,6 +273,101 @@ class BrowserCollector(BaseCollector):
             ms = int(action.get("ms", 1000))
             page.wait_for_timeout(ms)
             return {"type": "wait_for_timeout", "ms": ms}
+        if action_type == "download_url_from_frame_expression":
+            target_frame = self.find_frame(page, action)
+            if target_frame is None:
+                raise RuntimeError(f"frame not found for action: {action}")
+            relative_url = target_frame.evaluate(action.get("expression", ""))
+            if not relative_url:
+                raise RuntimeError("download url expression returned empty value")
+            download_url = urljoin(target_frame.url, str(relative_url))
+            cookies = page.context.cookies()
+            cookie_header = "; ".join(f"{cookie['name']}={cookie['value']}" for cookie in cookies)
+            request = Request(
+                download_url,
+                headers={
+                    "Cookie": cookie_header,
+                    "Referer": target_frame.url,
+                    "User-Agent": page.evaluate("() => navigator.userAgent"),
+                },
+            )
+            with urlopen(request, timeout=int(action.get("timeout_seconds", 30))) as response:
+                payload = response.read()
+                default_name = self.infer_download_name(response.headers, "download.bin")
+                path = self.resolve_output_path(output_dir, action.get("path"), default_name)
+                lowered = self.decode_payload_text(payload[:512]).lower()
+                if path.suffix.lower() == ".xls" and "<script" in lowered and "alert(" in lowered:
+                    no_data_path = self.no_data_path(path)
+                    no_data_path.write_bytes(payload)
+                    return {
+                        "type": "download_url_from_frame_expression",
+                        "url": download_url,
+                        "path": str(no_data_path),
+                        "no_data_message": self.decode_payload_text(payload),
+                    }
+                path.write_bytes(payload)
+            return {"type": "download_url_from_frame_expression", "url": download_url, "path": str(path)}
+        if action_type == "download_post_from_page_expression":
+            payload = page.evaluate(action.get("expression", ""))
+            if not isinstance(payload, dict):
+                raise RuntimeError("download post expression must return an object")
+            download_url = urljoin(page.url, str(payload.get("url", "")))
+            form_payload = payload.get("form", {})
+            if not download_url or not isinstance(form_payload, dict):
+                raise RuntimeError("download post expression returned invalid url/form payload")
+            encoded = urlencode({key: "" if value is None else str(value) for key, value in form_payload.items()}).encode("utf-8")
+            cookies = page.context.cookies()
+            cookie_header = "; ".join(f"{cookie['name']}={cookie['value']}" for cookie in cookies)
+            request = Request(
+                download_url,
+                data=encoded,
+                headers={
+                    "Cookie": cookie_header,
+                    "Referer": page.url,
+                    "User-Agent": page.evaluate("() => navigator.userAgent"),
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+            )
+            with urlopen(request, timeout=int(action.get("timeout_seconds", 30))) as response:
+                response_payload = response.read()
+                default_name = self.infer_download_name(response.headers, "download.bin")
+                path = self.resolve_output_path(output_dir, action.get("path"), default_name)
+                if self.is_html_interstitial(response_payload):
+                    interstitial = self.decode_payload_text(response_payload)
+                    msg = self.extract_match(r'var msg\s*=\s*"([^"]*)";', interstitial)
+                    if msg:
+                        no_data_path = self.no_data_path(path)
+                        no_data_path.write_bytes(response_payload)
+                        return {
+                            "type": "download_post_from_page_expression",
+                            "url": download_url,
+                            "path": str(no_data_path),
+                            "no_data_message": msg,
+                        }
+                    follow_url = urljoin(
+                        page.url,
+                        self.extract_match(r'url\s*=\s*"([^"]*fileDown[^"]*)";', interstitial, "/Homeplus/filedown/fileDown.do"),
+                    )
+                    follow_form = {
+                        "deleteFile": self.extract_match(r'#deleteFile"\)\.val\("([^"]*)"\)', interstitial, "true") or "true",
+                        "fileUrl": self.extract_match(r'#fileUrl"\)\.val\("([^"]*)"\)', interstitial, ""),
+                        "fileName": self.extract_match(r'#fileName"\)\.val\("([^"]*)"\)', interstitial, ""),
+                    }
+                    follow_request = Request(
+                        follow_url,
+                        data=urlencode(follow_form).encode("utf-8"),
+                        headers={
+                            "Cookie": cookie_header,
+                            "Referer": download_url,
+                            "User-Agent": page.evaluate("() => navigator.userAgent"),
+                            "Content-Type": "application/x-www-form-urlencoded",
+                        },
+                    )
+                    with urlopen(follow_request, timeout=int(action.get("timeout_seconds", 30))) as follow_response:
+                        response_payload = follow_response.read()
+                        default_name = self.infer_download_name(follow_response.headers, follow_form.get("fileName") or default_name)
+                path.write_bytes(response_payload)
+            return {"type": "download_post_from_page_expression", "url": download_url, "path": str(path)}
         if action_type == "assert_frame_url_contains":
             url_contains = action.get("url_contains", "")
             target_frame = self.find_frame(page, {"frame_url_contains": url_contains})
@@ -292,20 +480,39 @@ class BrowserCollector(BaseCollector):
             return "login_required", "recheck_credentials_and_login_flow", "page is still on login form after browser actions"
         return None
 
-    def detect_data_artifacts(self, output_dir: Path) -> bool:
-        allowed = {".xlsx", ".xlsm", ".csv"}
+    def detect_output_state(self, output_dir: Path) -> tuple[bool, bool]:
+        allowed = {".xlsx", ".xlsm", ".xls", ".csv"}
+        no_data_downloaded = False
         for path in output_dir.rglob("*"):
             if not path.is_file():
                 continue
-            if path.suffix.lower() in allowed or path.name.endswith("_analysis.json"):
-                return True
-        return False
+            if path.name.endswith(".no_data.html"):
+                no_data_downloaded = True
+                continue
+            if path.name.endswith("_analysis.json"):
+                return True, no_data_downloaded
+            if path.suffix.lower() in allowed:
+                try:
+                    payload = path.read_bytes()[:4096]
+                    lowered = self.decode_payload_text(payload).lower()
+                    if path.suffix.lower() == ".xls" and "<script" in lowered and "alert(" in lowered:
+                        no_data_downloaded = True
+                        continue
+                    if path.suffix.lower() == ".csv" and "<script" in lowered and "downloadfrm" in lowered:
+                        no_data_downloaded = True
+                        continue
+                    return True, no_data_downloaded
+                except Exception:
+                    continue
+        return False, no_data_downloaded
 
     def run_actions(self, page, output_dir: Path, job: Job) -> list[dict[str, Any]]:
         actions = job.playbook.browser_actions if job.playbook else []
         credentials = self.channel_credentials.get(job.vendor_name)
+        template_context = self.build_template_context(job)
         executed: list[dict[str, Any]] = []
         for action in actions:
+            action = self.render_templates(action, template_context)
             if action.get("type") == "goto" and not action.get("url"):
                 action = {**action, "url": job.login_url}
             executed.append(self.run_action_with_retry(page, output_dir, action, credentials))
@@ -369,6 +576,7 @@ class BrowserCollector(BaseCollector):
                     with sync_playwright() as playwright:
                         browser = playwright.chromium.launch(headless=True)
                         context = browser.new_context(
+                            accept_downloads=True,
                             storage_state=str(session_state_path) if reuse_session_state and session_state_path.exists() else None
                         )
                         page = context.new_page()
@@ -386,13 +594,18 @@ class BrowserCollector(BaseCollector):
                             context.storage_state(path=str(session_state_path))
                         context.close()
                         browser.close()
-                    data_ready = self.detect_data_artifacts(output_dir)
+                    data_ready, no_data_downloaded = self.detect_output_state(output_dir)
                     page_state = self.classify_post_action_page_state(job, summary) if not data_ready else None
                     if data_ready:
                         status = "executed"
                         detail = "browser collector executed"
                         category = "collected"
                         next_action = "analyze_and_merge"
+                    elif no_data_downloaded:
+                        status = "executed"
+                        detail = "browser collector executed (no data for selected date range)"
+                        category = "no_data"
+                        next_action = "choose_alternate_date_range_or_accept_zero"
                     elif page_state:
                         category, next_action, detail = page_state
                         status = "blocked" if category in {"auth_required", "captcha_required"} else "failed"
