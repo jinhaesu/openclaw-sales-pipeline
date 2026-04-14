@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from .operations import build_channel_operation_profile, build_operations_bundle
 from .standards import build_channel_output_contract, build_standards_bundle, merge_postprocess_rules
 
 
@@ -18,12 +19,16 @@ def build_workflow_knowledge(master_path: Path, playbook_dir: Path) -> dict[str,
                 raw = json.load(handle)
             playbooks[raw["vendor_name"]] = raw
 
+    master_rows = master.get("master", [])
+    operations_bundle = build_operations_bundle(master_rows, playbooks)
+
     items = []
-    for row in master.get("master", []):
+    for row in master_rows:
         vendor_name = row.get("vendor_name", "")
         workflow_flags = row.get("workflow_flags", {})
         video_support = row.get("video_support", {})
         playbook = playbooks.get(vendor_name, {})
+        operation_profile = build_channel_operation_profile(row, playbook)
         items.append(
             {
                 "vendor_name": vendor_name,
@@ -44,20 +49,22 @@ def build_workflow_knowledge(master_path: Path, playbook_dir: Path) -> dict[str,
                     playbook.get("analysis_profile", {}),
                     playbook.get("postprocess_rules", {}),
                 ),
+                "operations_profile": operation_profile,
                 "channel_output_contract": build_channel_output_contract(),
-                "optimization_hints": build_hints(row, playbook),
+                "optimization_hints": build_hints(row, playbook, operation_profile),
             }
         )
 
     return {
         "standards": build_standards_bundle(),
+        "operations": operations_bundle,
         "channel_count": master.get("channel_count", len(items)),
         "video_supported_count": master.get("video_supported_count", 0),
         "items": items,
     }
 
 
-def build_hints(row: dict[str, Any], playbook: dict[str, Any]) -> list[str]:
+def build_hints(row: dict[str, Any], playbook: dict[str, Any], operation_profile: dict[str, Any]) -> list[str]:
     hints: list[str] = []
     path = row.get("collection_path", "") or ""
     notes = row.get("special_notes", "") or ""
@@ -74,6 +81,17 @@ def build_hints(row: dict[str, Any], playbook: dict[str, Any]) -> list[str]:
         hints.append("standardized_channel_output")
     if "OTP" in notes or "인증" in notes:
         hints.append("authentication_step_present")
+    queue_id = operation_profile.get("queue_id")
+    if queue_id == "auth_wait":
+        hints.append("auth_queue_managed")
+    if queue_id == "legacy":
+        hints.append("legacy_route_tracking_required")
+    if queue_id == "environment_special":
+        hints.append("special_browser_environment_required")
+    if operation_profile.get("user_browser_preferred"):
+        hints.append("user_browser_preferred")
+    if operation_profile.get("collection_mode") == "download_then_analyze":
+        hints.append("download_pipeline_priority")
     return hints
 
 

@@ -62,6 +62,19 @@ class Job:
     channel_group: str
     requires_verification: bool
     has_video: bool
+    queue_id: str = "stable"
+    queue_label: str = "안정 채널"
+    concurrency_policy: str = "aggressive_parallel"
+    browser_policy: str = "isolated_browser_or_api"
+    session_strategy: str = "reuse_session_first"
+    collection_mode: str = "screen_or_internal_route"
+    revenue_basis: str = ""
+    revenue_metric_key: str = "sales"
+    date_basis: str = ""
+    validation_mode: str = "manual_definition_required"
+    verification_mode: str = "none"
+    auth_priority: int = 0
+    user_browser_preferred: bool = False
     playbook: Playbook | None = None
     notes: list[str] = field(default_factory=list)
 

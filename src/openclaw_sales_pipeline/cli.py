@@ -10,6 +10,7 @@ from .channel_credentials import ChannelCredentialStore
 from .config import load_channel_master, load_playbooks, load_runtime_config
 from .excel_analysis import analyze_sales_file, write_analysis
 from .ingest import ingest_downloads
+from .operations import build_operations_bundle, write_operations_bundle
 from .orchestrator import build_jobs, execute_jobs, summarize_jobs
 from .reporting import build_report_bundle, validate_smtp_profile
 from .run_summary import summarize_runs
@@ -52,6 +53,13 @@ def parse_args() -> argparse.Namespace:
         "--output-dir",
         default="artifacts/standards",
         help="Directory to write standards JSON files",
+    )
+
+    operations_parser = subparsers.add_parser("export-operations", help="Export queue strategy, auth waitlist, legacy routes, and channel operating profiles")
+    operations_parser.add_argument(
+        "--output-dir",
+        default="artifacts/operations",
+        help="Directory to write operations JSON/Markdown files",
     )
 
     analyze_parser = subparsers.add_parser("analyze-file", help="Analyze downloaded sales Excel/CSV file")
@@ -135,12 +143,22 @@ def main() -> None:
         bundle_path = output_dir / "standards_bundle.json"
         bundle_path.write_text(json.dumps(standards, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         outputs["standards_bundle"] = str(bundle_path.resolve())
-        for name in ("channel_output_contract", "excel_postprocess_ruleset", "product_analysis_master_schema"):
+        for name in ("channel_output_contract", "excel_postprocess_ruleset", "product_analysis_master_schema", "channel_operating_model"):
             payload = standards[name]
             file_path = output_dir / f"{name}.json"
             file_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
             outputs[name] = str(file_path.resolve())
         print(json.dumps({"version": standards["version"], "outputs": outputs}, ensure_ascii=False, indent=2))
+        return
+
+    if args.command == "export-operations":
+        output_dir = Path(args.output_dir).expanduser()
+        master_path = Path(cfg.master_path).expanduser()
+        with master_path.open("r", encoding="utf-8") as handle:
+            master = json.load(handle)
+        bundle = build_operations_bundle(master.get("master", []), playbooks)
+        outputs = write_operations_bundle(output_dir, bundle)
+        print(json.dumps({"version": bundle["version"], "outputs": outputs}, ensure_ascii=False, indent=2))
         return
 
     if args.command == "analyze-file":
@@ -231,6 +249,10 @@ def main() -> None:
                     "vendor_name": job.vendor_name,
                     "strategy": job.strategy,
                     "run_mode": job.run_mode,
+                    "queue_id": job.queue_id,
+                    "collection_mode": job.collection_mode,
+                    "browser_policy": job.browser_policy,
+                    "session_strategy": job.session_strategy,
                     "has_playbook": job.playbook is not None,
                     "credential_key": job.playbook.credential_key if job.playbook else None,
                     "has_credentials": secrets.has(job.playbook.credential_key) if job.playbook else False,
